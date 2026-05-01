@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
                             onPremiumClick = {
                                 // TODO: Open PremiumOfferScreen
                             },
-                            onExportClick = {
+                            onSaveClick = {
                                 // TODO: Export processed video
                             }
                         )

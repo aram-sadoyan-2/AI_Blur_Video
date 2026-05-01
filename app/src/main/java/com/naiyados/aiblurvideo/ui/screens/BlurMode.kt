@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -13,9 +14,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.GridView
@@ -34,11 +36,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
-import com.naiyados.aiblurvideo.ui.components.BlurModeChip
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
-import com.naiyados.aiblurvideo.ui.components.EditorTopBar
-import com.naiyados.aiblurvideo.ui.components.ExportBottomBar
-import com.naiyados.aiblurvideo.ui.components.VideoPreviewCard
+import com.naiyados.aiblurvideo.ui.components.EditorActionTool
+import com.naiyados.aiblurvideo.ui.components.EditorHeaderBar
+import com.naiyados.aiblurvideo.ui.components.PlaybackControlBar
+import com.naiyados.aiblurvideo.ui.components.VideoPreviewPanel
+import com.naiyados.aiblurvideo.ui.components.VideoSeekBarSection
 import com.naiyados.aiblurvideo.ui.model.BlurMode
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 
@@ -48,22 +51,18 @@ fun VideoEditorScreen(
     isPremium: Boolean,
     onBackClick: () -> Unit,
     onPremiumClick: () -> Unit,
-    onExportClick: () -> Unit
+    onSaveClick: () -> Unit
 ) {
     val context = LocalContext.current
 
     val player = remember(videoUri) {
-        if (videoUri == null) {
-            null
-        } else {
-            ExoPlayer.Builder(context).build()
-        }
+        if (videoUri == null) null else ExoPlayer.Builder(context).build()
     }
 
     var selectedMode by remember { mutableStateOf(BlurMode.FullBlur) }
     var blurStrength by remember { mutableFloatStateOf(0.45f) }
-    var isProcessing by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
+    var isMuted by remember { mutableStateOf(false) }
 
     LaunchedEffect(player, videoUri) {
         if (player != null && videoUri != null) {
@@ -75,13 +74,13 @@ fun VideoEditorScreen(
     }
 
     LaunchedEffect(player, isPlaying) {
-        if (player != null) {
-            if (isPlaying) {
-                player.play()
-            } else {
-                player.pause()
-            }
+        player?.let {
+            if (isPlaying) it.play() else it.pause()
         }
+    }
+
+    LaunchedEffect(player, isMuted) {
+        player?.volume = if (isMuted) 0f else 1f
     }
 
     DisposableEffect(player) {
@@ -93,148 +92,132 @@ fun VideoEditorScreen(
     val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AiBlurColors.Background),
-        contentPadding = PaddingValues(
-            top = topPadding + 10.dp,
-            bottom = bottomPadding + 14.dp
-        ),
+            .background(AiBlurColors.Background)
+            .verticalScroll(rememberScrollState())
+            .padding(
+                top = topPadding + 8.dp,
+                bottom = bottomPadding + 14.dp
+            ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item {
-            EditorTopBar(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                isPremium = isPremium,
-                onBackClick = {
-                    isPlaying = false
-                    player?.pause()
-                    onBackClick()
-                },
-                onPremiumClick = onPremiumClick
-            )
-        }
+        EditorHeaderBar(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            onBackClick = {
+                isPlaying = false
+                player?.pause()
+                onBackClick()
+            },
+            onSaveClick = {
+                isPlaying = false
+                player?.pause()
+                onSaveClick()
+            }
+        )
 
-        item {
-            VideoPreviewCard(
-                modifier = Modifier.fillMaxWidth(),
-                videoUri = videoUri,
-                player = player,
-                selectedMode = selectedMode,
-                blurStrength = blurStrength,
-                isProcessing = isProcessing,
-                isPlaying = isPlaying,
-                onPlayingChange = { playing ->
-                    isPlaying = playing
+        VideoPreviewPanel(
+            modifier = Modifier.fillMaxWidth(),
+            player = player,
+            selectedMode = selectedMode,
+            blurStrength = blurStrength,
+            isPlaying = isPlaying,
+            onPlayPauseClick = {
+                if (player != null) {
+                    isPlaying = !isPlaying
                 }
+            }
+        )
+
+        PlaybackControlBar(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            player = player,
+            isPlaying = isPlaying,
+            isMuted = isMuted,
+            onPlayPauseClick = {
+                if (player != null) {
+                    isPlaying = !isPlaying
+                }
+            },
+            onToggleMute = {
+                isMuted = !isMuted
+            }
+        )
+
+        VideoSeekBarSection(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            player = player
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            EditorActionTool(
+                title = "Full Blur",
+                icon = Icons.Rounded.BlurOn,
+                selected = selectedMode == BlurMode.FullBlur,
+                onClick = { selectedMode = BlurMode.FullBlur }
             )
-        }
 
-        item {
-            BlurModeRow(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                selectedMode = selectedMode,
-                isPremium = isPremium,
-                onModeSelected = { mode ->
-                    val premiumLocked = mode == BlurMode.Object || mode == BlurMode.Pixelate
+            EditorActionTool(
+                title = "Background",
+                icon = Icons.Rounded.Person,
+                selected = selectedMode == BlurMode.Background,
+                onClick = { selectedMode = BlurMode.Background }
+            )
 
-                    if (premiumLocked && !isPremium) {
-                        onPremiumClick()
+            EditorActionTool(
+                title = "Face",
+                icon = Icons.Rounded.Face,
+                selected = selectedMode == BlurMode.Face,
+                onClick = { selectedMode = BlurMode.Face }
+            )
+
+            EditorActionTool(
+                title = "Object",
+                icon = Icons.Rounded.Interests,
+                selected = selectedMode == BlurMode.Object,
+                premium = !isPremium,
+                onClick = {
+                    if (isPremium) {
+                        selectedMode = BlurMode.Object
                     } else {
-                        selectedMode = mode
+                        onPremiumClick()
                     }
                 }
             )
-        }
 
-        item {
-            BlurStrengthSlider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                value = blurStrength,
-                onValueChange = { value ->
-                    blurStrength = value
+            EditorActionTool(
+                title = "Pixelate",
+                icon = Icons.Rounded.GridView,
+                selected = selectedMode == BlurMode.Pixelate,
+                premium = !isPremium,
+                onClick = {
+                    if (isPremium) {
+                        selectedMode = BlurMode.Pixelate
+                    } else {
+                        onPremiumClick()
+                    }
                 }
             )
-        }
 
-        item {
-            ExportBottomBar(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                isPremium = isPremium,
-                onExportClick = {
-                    isPlaying = false
-                    player?.pause()
-                    isProcessing = true
-                    onExportClick()
-                },
-                onPremiumClick = onPremiumClick
+            EditorActionTool(
+                title = "Effects",
+                icon = Icons.Rounded.AutoFixHigh,
+                selected = false,
+                onClick = { }
             )
         }
-    }
-}
 
-@Composable
-private fun BlurModeRow(
-    modifier: Modifier = Modifier,
-    selectedMode: BlurMode,
-    isPremium: Boolean,
-    onModeSelected: (BlurMode) -> Unit
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        BlurModeChip(
-            text = "Full blur",
-            icon = Icons.Rounded.BlurOn,
-            selected = selectedMode == BlurMode.FullBlur,
-            locked = false,
-            onClick = {
-                onModeSelected(BlurMode.FullBlur)
-            }
-        )
-
-        BlurModeChip(
-            text = "Background",
-            icon = Icons.Rounded.Person,
-            selected = selectedMode == BlurMode.Background,
-            locked = false,
-            onClick = {
-                onModeSelected(BlurMode.Background)
-            }
-        )
-
-        BlurModeChip(
-            text = "Face",
-            icon = Icons.Rounded.Face,
-            selected = selectedMode == BlurMode.Face,
-            locked = false,
-            onClick = {
-                onModeSelected(BlurMode.Face)
-            }
-        )
-
-        BlurModeChip(
-            text = "Object",
-            icon = Icons.Rounded.Interests,
-            selected = selectedMode == BlurMode.Object,
-            locked = !isPremium,
-            onClick = {
-                onModeSelected(BlurMode.Object)
-            }
-        )
-
-        BlurModeChip(
-            text = "Pixelate",
-            icon = Icons.Rounded.GridView,
-            selected = selectedMode == BlurMode.Pixelate,
-            locked = !isPremium,
-            onClick = {
-                onModeSelected(BlurMode.Pixelate)
-            }
+        BlurStrengthSlider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            value = blurStrength,
+            onValueChange = { blurStrength = it }
         )
     }
 }
