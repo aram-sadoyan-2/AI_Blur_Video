@@ -8,6 +8,7 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,10 +19,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,12 +37,13 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -49,7 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.media3.common.Player
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -65,9 +66,10 @@ private data class TimelineFrame(
 @Composable
 fun VideoFrameStripSection(
     videoUri: Uri?,
-    player: Player?,
     modifier: Modifier = Modifier,
-    maxDurationSeconds: Int = 30
+    maxDurationSeconds: Int = 30,
+    onSeekTo: (Long) -> Unit,
+    onScrubFrameChange: (Bitmap?) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -165,9 +167,10 @@ fun VideoFrameStripSection(
             FixedCenterTimeline(
                 frames = frames,
                 durationMs = durationMs,
-                player = player,
                 scrollState = scrollState,
-                maxDurationSeconds = maxDurationSeconds
+                maxDurationSeconds = maxDurationSeconds,
+                onSeekTo = onSeekTo,
+                onScrubFrameChange = onScrubFrameChange
             )
         }
     }
@@ -177,20 +180,42 @@ fun VideoFrameStripSection(
 private fun FixedCenterTimeline(
     frames: List<TimelineFrame>,
     durationMs: Long,
-    player: Player?,
     scrollState: androidx.compose.foundation.ScrollState,
-    maxDurationSeconds: Int
+    maxDurationSeconds: Int,
+    onSeekTo: (Long) -> Unit,
+    onScrubFrameChange: (Bitmap?) -> Unit
 ) {
     val density = LocalDensity.current
+    val latestOnSeekTo by rememberUpdatedState(onSeekTo)
+    val latestOnScrubFrameChange by rememberUpdatedState(onScrubFrameChange)
 
     val secondWidth = 38.dp
-    val secondWidthPx = with(density) { secondWidth.toPx() }
+    val secondWidthPx = with(density) {
+        secondWidth.toPx()
+    }
 
     val safeDurationMs = durationMs.coerceAtLeast(1L)
+
     val secondCount = ((safeDurationMs + 999L) / 1000L)
         .toInt()
         .coerceAtLeast(1)
         .coerceAtMost(maxDurationSeconds)
+
+    fun seekFromCurrentScroll() {
+        val seconds = scrollState.value / secondWidthPx
+
+        val seekMs = (seconds * 1000f)
+            .roundToLong()
+            .coerceIn(0L, safeDurationMs)
+
+        latestOnSeekTo(seekMs)
+
+        val previewFrame = frames.minByOrNull { frame ->
+            kotlin.math.abs(frame.timeMs - seekMs)
+        }
+
+        latestOnScrubFrameChange(previewFrame?.bitmap)
+    }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -200,28 +225,40 @@ private fun FixedCenterTimeline(
         val sidePadding = maxWidth / 2
         val totalWidth = sidePadding + (secondWidth * secondCount) + sidePadding
 
-        LaunchedEffect(scrollState, player, safeDurationMs, secondWidthPx) {
-            snapshotFlow { scrollState.value }
-                .collect { scrollPx ->
-                    if (scrollState.isScrollInProgress) {
-                        val seconds = scrollPx / secondWidthPx
-                        val seekMs = (seconds * 1000f)
-                            .roundToLong()
-                            .coerceIn(0L, safeDurationMs)
-
-                        player?.seekTo(seekMs)
-                    }
-                }
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(82.dp)
+                .pointerInput(safeDurationMs, secondWidthPx, frames.size) {
+                    detectDragGestures(
+                        onDragStart = {
+                            seekFromCurrentScroll()
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+
+                            scrollState.dispatchRawDelta(-dragAmount.x)
+
+                            // Realtime preview while dragging
+                            seekFromCurrentScroll()
+                        },
+                        onDragEnd = {
+                            seekFromCurrentScroll()
+                            latestOnScrubFrameChange(null)
+                        },
+                        onDragCancel = {
+                            seekFromCurrentScroll()
+                            latestOnScrubFrameChange(null)
+                        }
+                    )
+                }
         ) {
             Row(
                 modifier = Modifier
-                    .horizontalScroll(scrollState)
+                    .horizontalScroll(
+                        state = scrollState,
+                        enabled = false
+                    )
                     .requiredWidth(totalWidth)
                     .height(82.dp),
                 verticalAlignment = Alignment.Top
@@ -329,7 +366,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
     onDuration: suspend (Long) -> Unit,
     onFrame: suspend (TimelineFrame) -> Unit
 ) {
-    val videoKey = "v6_" + videoUri.toString()
+    val videoKey = "v11_" + videoUri.toString()
         .hashCode()
         .toString()
         .replace("-", "m")

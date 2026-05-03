@@ -1,5 +1,6 @@
 package com.naiyados.aiblurvideo.ui.components
 
+import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.Shader
@@ -47,6 +48,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import com.naiyados.aiblurvideo.ui.model.BlurMode
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun VideoPreviewPanel(
@@ -55,7 +59,8 @@ fun VideoPreviewPanel(
     blurStrength: Float,
     isPlaying: Boolean,
     onPlayPauseClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrubPreviewBitmap: Bitmap? = null,
 ) {
     val blurRadiusPx = when (selectedMode) {
         BlurMode.FullBlur -> blurStrength.coerceIn(0f, 1f) * 55f
@@ -105,6 +110,15 @@ fun VideoPreviewPanel(
                     PlayerTextureViewFit(
                         player = player
                     )
+
+                    if (scrubPreviewBitmap != null) {
+                        Image(
+                            bitmap = scrubPreviewBitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
                 }
             }
 

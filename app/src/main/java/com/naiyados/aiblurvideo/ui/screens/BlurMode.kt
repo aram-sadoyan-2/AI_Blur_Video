@@ -1,11 +1,12 @@
 package com.naiyados.aiblurvideo.ui.screens
 
 import android.net.Uri
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.BlurOn
@@ -28,6 +28,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,9 +43,10 @@ import com.naiyados.aiblurvideo.ui.components.EditorHeaderBar
 import com.naiyados.aiblurvideo.ui.components.PlaybackControlBar
 import com.naiyados.aiblurvideo.ui.components.VideoFrameStripSection
 import com.naiyados.aiblurvideo.ui.components.VideoPreviewPanel
-import com.naiyados.aiblurvideo.ui.components.VideoSeekBarSection
 import com.naiyados.aiblurvideo.ui.model.BlurMode
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import androidx.media3.exoplayer.SeekParameters
+import android.graphics.Bitmap
 
 @Composable
 fun VideoEditorScreen(
@@ -64,10 +66,16 @@ fun VideoEditorScreen(
     var blurStrength by remember { mutableFloatStateOf(0.45f) }
     var isPlaying by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
+    var lastTimelineSeekMs by remember { mutableLongStateOf(-1L) }
+    var lastTimelineSeekClockMs by remember { mutableLongStateOf(0L) }
+    var scrubPreviewBitmap by remember {
+        mutableStateOf<Bitmap?>(null)
+    }
 
     LaunchedEffect(player, videoUri) {
         if (player != null && videoUri != null) {
             player.setMediaItem(MediaItem.fromUri(videoUri))
+            player.setSeekParameters(SeekParameters.EXACT)
             player.prepare()
             player.playWhenReady = false
             isPlaying = false
@@ -125,6 +133,7 @@ fun VideoEditorScreen(
             selectedMode = selectedMode,
             blurStrength = blurStrength,
             isPlaying = isPlaying,
+            scrubPreviewBitmap = scrubPreviewBitmap,
             onPlayPauseClick = {
                 if (player != null) {
                     isPlaying = !isPlaying
@@ -147,11 +156,22 @@ fun VideoEditorScreen(
             }
         )
 
+//        VideoSeekBarSection(
+//                modifier = Modifier.padding(horizontal = 16.dp),
+//                player = player
+//            )
+
         VideoFrameStripSection(
             modifier = Modifier.padding(horizontal = 16.dp),
             videoUri = videoUri,
-            player = player,
-            maxDurationSeconds = 30
+            maxDurationSeconds = 30,
+            onSeekTo = { seekMs ->
+                Log.d("dwd", "SEEEEEk - $seekMs")
+                player?.seekTo(seekMs)
+            },
+            onScrubFrameChange = { bitmap ->
+                scrubPreviewBitmap = bitmap
+            }
         )
 
         Row(
