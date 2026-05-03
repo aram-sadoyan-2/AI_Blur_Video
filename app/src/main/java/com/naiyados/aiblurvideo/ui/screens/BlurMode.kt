@@ -40,6 +40,7 @@ import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
 import com.naiyados.aiblurvideo.ui.components.EditorActionTool
 import com.naiyados.aiblurvideo.ui.components.EditorHeaderBar
 import com.naiyados.aiblurvideo.ui.components.PlaybackControlBar
+import com.naiyados.aiblurvideo.ui.components.VideoFrameStripSection
 import com.naiyados.aiblurvideo.ui.components.VideoPreviewPanel
 import com.naiyados.aiblurvideo.ui.components.VideoSeekBarSection
 import com.naiyados.aiblurvideo.ui.model.BlurMode
@@ -146,9 +147,12 @@ fun VideoEditorScreen(
             }
         )
 
-        VideoSeekBarSection(
+        VideoFrameStripSection(
             modifier = Modifier.padding(horizontal = 16.dp),
-            player = player
+            videoUri = videoUri,
+            player = player,
+            frameIntervalMs = 500L,
+            maxFrames = 36
         )
 
         Row(
