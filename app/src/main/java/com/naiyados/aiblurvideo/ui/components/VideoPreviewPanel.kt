@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -65,113 +64,103 @@ fun VideoPreviewPanel(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
             .background(Color.Black)
-            .padding(vertical = 4.dp)
-            .clipToBounds()
+            .clipToBounds(),
+        contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth()
-                .aspectRatio(1.08f)
+                .fillMaxHeight()
+                .aspectRatio(9f / 16f)
+                .background(Color.Black)
                 .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .aspectRatio(9f / 16f)
-                    .background(Color.Black)
-                    .clipToBounds(),
-                contentAlignment = Alignment.Center
-            ) {
-                if (player == null) {
-                    EmptyPreview()
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                clip = true
-
-                                renderEffect =
-                                    if (
-                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                                        blurRadiusPx > 0.5f
-                                    ) {
-                                        AndroidRenderEffect
-                                            .createBlurEffect(
-                                                blurRadiusPx,
-                                                blurRadiusPx,
-                                                Shader.TileMode.CLAMP
-                                            )
-                                            .asComposeRenderEffect()
-                                    } else {
-                                        null
-                                    }
-                            }
-                    ) {
-                        PlayerTextureViewFit(
-                            player = player
-                        )
-                    }
-                }
-
-                Surface(
+            if (player == null) {
+                EmptyPreview()
+            } else {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp),
-                    color = Color.Black.copy(alpha = 0.34f),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.10f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AutoAwesome,
-                            contentDescription = null,
-                            tint = AiBlurColors.Orange,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            clip = true
 
-                        Text(
-                            text = selectedMode.label,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
+                            renderEffect =
+                                if (
+                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                    blurRadiusPx > 0.5f
+                                ) {
+                                    AndroidRenderEffect
+                                        .createBlurEffect(
+                                            blurRadiusPx,
+                                            blurRadiusPx,
+                                            Shader.TileMode.CLAMP
+                                        )
+                                        .asComposeRenderEffect()
+                                } else {
+                                    null
+                                }
+                        }
+                ) {
+                    PlayerTextureViewFit(
+                        player = player
+                    )
                 }
+            }
 
-                Surface(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color.Black.copy(alpha = 0.30f),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.14f)
-                    )
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
+                color = Color.Black.copy(alpha = 0.34f),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.10f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    IconButton(
-                        onClick = onPlayPauseClick,
-                        modifier = Modifier.size(58.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) {
-                                Icons.Rounded.Pause
-                            } else {
-                                Icons.Rounded.PlayArrow
-                            },
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = AiBlurColors.Orange,
+                        modifier = Modifier.size(16.dp)
+                    )
+
+                    Text(
+                        text = selectedMode.label,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.align(Alignment.Center),
+                color = Color.Black.copy(alpha = 0.30f),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.14f)
+                )
+            ) {
+                IconButton(
+                    onClick = onPlayPauseClick,
+                    modifier = Modifier.size(58.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) {
+                            Icons.Rounded.Pause
+                        } else {
+                            Icons.Rounded.PlayArrow
+                        },
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = Color.White,
+                        modifier = Modifier.size(34.dp)
+                    )
                 }
             }
         }
