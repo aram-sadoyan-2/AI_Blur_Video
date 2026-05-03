@@ -7,23 +7,21 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,12 +31,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,15 +49,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 private data class TimelineFrame(
     val timeMs: Long,
@@ -70,8 +67,7 @@ fun VideoFrameStripSection(
     videoUri: Uri?,
     player: Player?,
     modifier: Modifier = Modifier,
-    framesPerSecond: Int = 4,
-    maxDurationSeconds: Int = 60
+    maxDurationSeconds: Int = 30
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -82,10 +78,6 @@ fun VideoFrameStripSection(
     }
 
     var durationMs by remember(videoUri) {
-        mutableLongStateOf(0L)
-    }
-
-    var currentPositionMs by remember {
         mutableLongStateOf(0L)
     }
 
@@ -109,47 +101,23 @@ fun VideoFrameStripSection(
 
         loading = true
 
-        val result = withContext(Dispatchers.IO) {
-            loadTimelineFrames(
-                context = context,
-                videoUri = videoUri,
-                framesPerSecond = framesPerSecond,
-                maxDurationSeconds = maxDurationSeconds
-            )
-        }
+        loadTimelineFramesProgressive(
+            context = context,
+            videoUri = videoUri,
+            maxDurationSeconds = maxDurationSeconds,
+            onDuration = { duration ->
+                durationMs = duration
+            },
+            onFrame = { frame ->
+                frames.add(frame)
+            }
+        )
 
         loading = false
 
-        durationMs = result.durationMs
-
-        if (result.frames.isEmpty()) {
+        if (frames.isEmpty()) {
             errorText = "Frames not loaded"
-        } else {
-            frames.addAll(result.frames)
         }
-    }
-
-    LaunchedEffect(player) {
-        while (player != null) {
-            currentPositionMs = player.currentPosition.coerceAtLeast(0L)
-            delay(80)
-        }
-    }
-
-    val safeDuration = durationMs.coerceAtLeast(1L)
-    val secondCount = ((safeDuration + 999L) / 1000L).toInt().coerceAtLeast(1)
-
-    val secondWidthDp = 76.dp
-    val timelineWidthDp = secondWidthDp * secondCount
-
-    val timelineWidthPx = with(density) {
-        timelineWidthDp.toPx()
-    }
-
-    val playheadX = if (safeDuration > 0L) {
-        (currentPositionMs.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f) * timelineWidthPx
-    } else {
-        0f
     }
 
     Surface(
@@ -191,91 +159,112 @@ fun VideoFrameStripSection(
                 )
             }
 
-            if (frames.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(76.dp)
-                        .horizontalScroll(scrollState)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .requiredWidth(timelineWidthDp)
-                            .height(76.dp)
-                            .pointerInput(safeDuration, timelineWidthPx) {
-                                detectTapGestures { offset ->
-                                    val progress = (offset.x / timelineWidthPx).coerceIn(0f, 1f)
-                                    val seekMs = (safeDuration * progress).toLong()
-                                    player?.seekTo(seekMs)
-                                    currentPositionMs = seekMs
-                                }
-                            }
-                            .pointerInput(safeDuration, timelineWidthPx) {
-                                detectDragGestures { change, _ ->
-                                    val progress = (change.position.x / timelineWidthPx).coerceIn(0f, 1f)
-                                    val seekMs = (safeDuration * progress).toLong()
-                                    player?.seekTo(seekMs)
-                                    currentPositionMs = seekMs
-                                    change.consume()
-                                }
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .requiredWidth(timelineWidthDp)
-                                .height(76.dp),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            repeat(secondCount) { second ->
-                                val frameForSecond = frames.firstOrNull {
-                                    it.timeMs >= second * 1000L &&
-                                            it.timeMs < (second + 1) * 1000L
-                                }
-
-                                TimelineSecondBlock(
-                                    second = second,
-                                    frame = frameForSecond,
-                                    width = secondWidthDp
-                                )
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        x = playheadX.roundToInt(),
-                                        y = 0
-                                    )
-                                }
-                                .width(2.dp)
-                                .fillMaxHeight()
-                                .background(Color.White)
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        x = playheadX.roundToInt() - with(density) { 5.dp.toPx().roundToInt() },
-                                        y = 0
-                                    )
-                                }
-                                .size(10.dp)
-                                .background(
-                                    color = Color.White,
-                                    shape = RoundedCornerShape(50)
-                                )
-                        )
-                    }
-                }
-            }
+            FixedCenterTimeline(
+                frames = frames,
+                durationMs = durationMs,
+                player = player,
+                scrollState = scrollState,
+                maxDurationSeconds = maxDurationSeconds
+            )
         }
     }
 }
 
 @Composable
-private fun TimelineSecondBlock(
+private fun FixedCenterTimeline(
+    frames: List<TimelineFrame>,
+    durationMs: Long,
+    player: Player?,
+    scrollState: androidx.compose.foundation.ScrollState,
+    maxDurationSeconds: Int
+) {
+    val density = LocalDensity.current
+
+    val secondWidth = 64.dp
+    val secondWidthPx = with(density) { secondWidth.toPx() }
+
+    val safeDurationMs = durationMs.coerceAtLeast(1L)
+    val secondCount = ((safeDurationMs + 999L) / 1000L)
+        .toInt()
+        .coerceAtLeast(1)
+        .coerceAtMost(maxDurationSeconds)
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(76.dp)
+    ) {
+        val sidePadding = maxWidth / 2
+        val totalWidth = sidePadding + (secondWidth * secondCount) + sidePadding
+
+        LaunchedEffect(scrollState, player, safeDurationMs, secondWidthPx) {
+            snapshotFlow { scrollState.value }
+                .collect { scrollPx ->
+                    if (scrollState.isScrollInProgress) {
+                        val seconds = scrollPx / secondWidthPx
+                        val seekMs = (seconds * 1000f)
+                            .roundToLong()
+                            .coerceIn(0L, safeDurationMs)
+
+                        player?.seekTo(seekMs)
+                    }
+                }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(76.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(scrollState)
+                    .requiredWidth(totalWidth)
+                    .height(76.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Spacer(modifier = Modifier.width(sidePadding))
+
+                repeat(secondCount) { second ->
+                    val frame = frames.firstOrNull {
+                        it.timeMs >= second * 1000L &&
+                                it.timeMs < (second + 1) * 1000L
+                    }
+
+                    TimelineSecondItem(
+                        second = second,
+                        frame = frame,
+                        width = secondWidth
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(sidePadding))
+            }
+
+            // Fixed center playhead
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .width(2.dp)
+                    .fillMaxHeight()
+                    .background(Color.White)
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .size(10.dp)
+                    .background(
+                        color = Color.White,
+                        shape = RoundedCornerShape(50)
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimelineSecondItem(
     second: Int,
     frame: TimelineFrame?,
     width: Dp
@@ -284,7 +273,7 @@ private fun TimelineSecondBlock(
         modifier = Modifier
             .width(width)
             .height(76.dp)
-            .padding(end = 2.dp)
+            .padding(end = 3.dp)
     ) {
         Box(
             modifier = Modifier
@@ -304,20 +293,21 @@ private fun TimelineSecondBlock(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(7.dp))
                 .background(Color.Black)
         ) {
             if (frame != null) {
                 Image(
                     bitmap = frame.bitmap.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .fillMaxHeight()
                         .background(Color.White.copy(alpha = 0.08f))
                 )
             }
@@ -325,77 +315,67 @@ private fun TimelineSecondBlock(
     }
 }
 
-private data class TimelineLoadResult(
-    val durationMs: Long,
-    val frames: List<TimelineFrame>
-)
-
-private fun loadTimelineFrames(
+private suspend fun loadTimelineFramesProgressive(
     context: Context,
     videoUri: Uri,
-    framesPerSecond: Int,
-    maxDurationSeconds: Int
-): TimelineLoadResult {
-    val retriever = MediaMetadataRetriever()
+    maxDurationSeconds: Int,
+    onDuration: suspend (Long) -> Unit,
+    onFrame: suspend (TimelineFrame) -> Unit
+) {
+    withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
 
-    return try {
-        retriever.setDataSource(context, videoUri)
+        try {
+            retriever.setDataSource(context, videoUri)
 
-        val durationMs = retriever
-            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            ?.toLongOrNull()
-            ?: 0L
+            val realDurationMs = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?: 0L
 
-        if (durationMs <= 0L) {
-            return TimelineLoadResult(
-                durationMs = 0L,
-                frames = emptyList()
-            )
-        }
+            if (realDurationMs <= 0L) return@withContext
 
-        val cappedDurationMs = durationMs.coerceAtMost(maxDurationSeconds * 1000L)
-        val frameIntervalMs = (1000L / framesPerSecond.coerceAtLeast(1)).coerceAtLeast(1L)
+            val cappedDurationMs = realDurationMs.coerceAtMost(maxDurationSeconds * 1000L)
 
-        val result = mutableListOf<TimelineFrame>()
-
-        var timeMs = 0L
-
-        while (timeMs <= cappedDurationMs) {
-            val bitmap = retriever.getFrameAtTime(
-                timeMs * 1000L,
-                MediaMetadataRetriever.OPTION_CLOSEST
-            )
-
-            if (bitmap != null) {
-                val smallBitmap = Bitmap.createScaledBitmap(
-                    bitmap,
-                    80,
-                    80,
-                    true
-                )
-
-                result.add(
-                    TimelineFrame(
-                        timeMs = timeMs,
-                        bitmap = smallBitmap
-                    )
-                )
+            withContext(Dispatchers.Main) {
+                onDuration(cappedDurationMs)
             }
 
-            timeMs += frameIntervalMs
-        }
+            var timeMs = 0L
 
-        TimelineLoadResult(
-            durationMs = cappedDurationMs,
-            frames = result
-        )
-    } catch (_: Throwable) {
-        TimelineLoadResult(
-            durationMs = 0L,
-            frames = emptyList()
-        )
-    } finally {
-        retriever.release()
+            while (timeMs <= cappedDurationMs) {
+                val bitmap = retriever.getFrameAtTime(
+                    timeMs * 1000L,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                )
+
+                if (bitmap != null) {
+                    val smallBitmap = Bitmap.createScaledBitmap(
+                        bitmap,
+                        72,
+                        72,
+                        true
+                    )
+
+                    withContext(Dispatchers.Main) {
+                        onFrame(
+                            TimelineFrame(
+                                timeMs = timeMs,
+                                bitmap = smallBitmap
+                            )
+                        )
+                    }
+                }
+
+                timeMs += 1000L
+            }
+        } catch (_: Throwable) {
+            withContext(Dispatchers.Main) {
+                onDuration(0L)
+            }
+        } finally {
+            retriever.release()
+        }
     }
 }
 
