@@ -69,8 +69,9 @@ fun BlurStrengthSlider(
             }
 
             Slider(
-                value = value,
-                onValueChange = onValueChange,
+                value = value.coerceIn(0f, 1f),
+                onValueChange = { onValueChange(it.coerceIn(0f, 1f)) },
+                valueRange = 0f..1f,
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
                     activeTrackColor = AiBlurColors.Pink,

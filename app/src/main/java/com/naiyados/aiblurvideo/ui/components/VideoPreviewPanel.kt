@@ -11,14 +11,14 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Pause
@@ -30,13 +30,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,7 +58,7 @@ fun VideoPreviewPanel(
     modifier: Modifier = Modifier
 ) {
     val blurRadiusPx = when (selectedMode) {
-        BlurMode.FullBlur -> blurStrength * 42f
+        BlurMode.FullBlur -> blurStrength.coerceIn(0f, 1f) * 28f
         else -> 0f
     }
 
@@ -64,13 +66,15 @@ fun VideoPreviewPanel(
         modifier = modifier
             .fillMaxWidth()
             .background(Color.Black)
-            .padding(vertical = 6.dp)
+            .padding(vertical = 4.dp)
+            .clipToBounds()
     ) {
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth()
-                .aspectRatio(1.08f),
+                .aspectRatio(1.08f)
+                .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -78,6 +82,10 @@ fun VideoPreviewPanel(
                     .fillMaxHeight()
                     .aspectRatio(9f / 16f)
                     .background(Color.Black)
+                    .clipToBounds()
+                    .graphicsLayer {
+                        clip = true
+                    }
             ) {
                 if (player == null) {
                     EmptyPreview()
@@ -126,7 +134,11 @@ fun VideoPreviewPanel(
                         modifier = Modifier.size(58.dp)
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            imageVector = if (isPlaying) {
+                                Icons.Rounded.Pause
+                            } else {
+                                Icons.Rounded.PlayArrow
+                            },
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             tint = Color.White,
                             modifier = Modifier.size(34.dp)
@@ -145,10 +157,20 @@ private fun PlayerTextureViewFit(
 ) {
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
 
-    AndroidView(
+    AndroidView<FrameLayout>(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
-            TextureView(ctx).apply {
+            val container = FrameLayout(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                clipChildren = true
+                clipToPadding = true
+                setBackgroundColor(android.graphics.Color.BLACK)
+            }
+
+            val textureView = TextureView(ctx).apply {
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -168,21 +190,31 @@ private fun PlayerTextureViewFit(
                     applyFitTransform(player.videoSize)
                 }
             }
-        },
-        update = { textureView ->
-            textureViewRef = textureView
-            player.setVideoTextureView(textureView)
-            textureView.applyRenderBlur(blurRadiusPx)
 
-            textureView.post {
-                textureView.applyFitTransform(player.videoSize)
+            container.addView(textureView)
+            container
+        },
+        update = { container ->
+            container.clipChildren = true
+            container.clipToPadding = true
+
+            val textureView = container.getChildAt(0) as? TextureView
+            if (textureView != null) {
+                textureViewRef = textureView
+                player.setVideoTextureView(textureView)
+                textureView.applyRenderBlur(blurRadiusPx)
+
+                textureView.post {
+                    textureView.applyFitTransform(player.videoSize)
+                }
             }
         },
-        onRelease = { textureView ->
-            player.clearVideoTextureView(textureView)
-            if (textureViewRef === textureView) {
-                textureViewRef = null
+        onRelease = { container ->
+            val textureView = container.getChildAt(0) as? TextureView
+            if (textureView != null) {
+                player.clearVideoTextureView(textureView)
             }
+            textureViewRef = null
         }
     )
 
@@ -232,6 +264,7 @@ private fun TextureView.applyFitTransform(
 ) {
     val viewWidth = width.toFloat()
     val viewHeight = height.toFloat()
+
     val rawVideoWidth = videoSize.width
     val rawVideoHeight = videoSize.height
 
@@ -296,6 +329,7 @@ private fun EmptyPreview() {
                 tint = Color.White,
                 modifier = Modifier.size(42.dp)
             )
+
             Text(
                 text = "No video selected",
                 color = Color.White,
