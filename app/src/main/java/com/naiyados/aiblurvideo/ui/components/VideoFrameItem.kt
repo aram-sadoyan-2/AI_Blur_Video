@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredWidth
@@ -41,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -155,7 +153,6 @@ fun VideoFrameStripSection(
                 Text(
                     text = when {
                         loading && frames.isEmpty() -> "Loading timeline..."
-                        loading && frames.isNotEmpty() -> "Timeline"
                         errorText != null -> errorText ?: "Timeline"
                         else -> "Timeline"
                     },
@@ -186,7 +183,7 @@ private fun FixedCenterTimeline(
 ) {
     val density = LocalDensity.current
 
-    val secondWidth = 56.dp
+    val secondWidth = 38.dp
     val secondWidthPx = with(density) { secondWidth.toPx() }
 
     val safeDurationMs = durationMs.coerceAtLeast(1L)
@@ -198,7 +195,7 @@ private fun FixedCenterTimeline(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(76.dp)
+            .height(82.dp)
     ) {
         val sidePadding = maxWidth / 2
         val totalWidth = sidePadding + (secondWidth * secondCount) + sidePadding
@@ -220,13 +217,13 @@ private fun FixedCenterTimeline(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(76.dp)
+                .height(82.dp)
         ) {
             Row(
                 modifier = Modifier
                     .horizontalScroll(scrollState)
                     .requiredWidth(totalWidth)
-                    .height(76.dp),
+                    .height(82.dp),
                 verticalAlignment = Alignment.Top
             ) {
                 Spacer(modifier = Modifier.width(sidePadding))
@@ -274,18 +271,28 @@ private fun TimelineSecondItem(
     frame: TimelineFrame?,
     width: Dp
 ) {
+    val imageHeight = 58.dp
+
+    val imageWidth = remember(frame?.bitmap) {
+        if (frame?.bitmap == null) {
+            30.dp
+        } else {
+            val ratio = frame.bitmap.width.toFloat() / frame.bitmap.height.toFloat()
+            (58f * ratio).dp.coerceIn(24.dp, width)
+        }
+    }
+
     Column(
         modifier = Modifier
             .width(width)
-            .height(76.dp)
-            .padding(end = 1.dp),
+            .height(82.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(18.dp),
-            contentAlignment = Alignment.CenterStart
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = formatSecondLabel(second),
@@ -295,27 +302,22 @@ private fun TimelineSecondItem(
             )
         }
 
-        Box(
-            modifier = Modifier
-                .width(54.dp)
-                .height(54.dp)
-                .clip(RoundedCornerShape(7.dp))
-                .background(Color.Black)
-        ) {
-            if (frame != null) {
-                Image(
-                    bitmap = frame.bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White.copy(alpha = 0.08f))
-                )
-            }
+        if (frame != null) {
+            Image(
+                bitmap = frame.bitmap.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier
+                    .width(imageWidth)
+                    .height(imageHeight),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .width(imageWidth)
+                    .height(imageHeight)
+                    .background(Color.White.copy(alpha = 0.08f))
+            )
         }
     }
 }
@@ -327,7 +329,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
     onDuration: suspend (Long) -> Unit,
     onFrame: suspend (TimelineFrame) -> Unit
 ) {
-    val videoKey = "v2_" + videoUri.toString()
+    val videoKey = "v6_" + videoUri.toString()
         .hashCode()
         .toString()
         .replace("-", "m")
@@ -342,6 +344,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
         .takeIf { it.exists() }
         ?.readText()
         ?.toLongOrNull()
+
     if (cachedDurationMs != null && cachedDurationMs > 0L) {
         onDuration(cachedDurationMs)
     }
@@ -360,7 +363,9 @@ private suspend fun loadCachedTimelineFramesProgressive(
             if (realDurationMs <= 0L) return@withContext
 
             val cappedDurationMs = realDurationMs.coerceAtMost(maxDurationSeconds * 1000L)
+
             durationFile.writeText(cappedDurationMs.toString())
+
             withContext(Dispatchers.Main) {
                 onDuration(cappedDurationMs)
             }
@@ -388,15 +393,13 @@ private suspend fun loadCachedTimelineFramesProgressive(
                 } else {
                     val bitmap = retriever.getFrameAtTime(
                         timeMs * 1000L,
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                        MediaMetadataRetriever.OPTION_CLOSEST
                     )
 
                     if (bitmap != null) {
-                        val smallBitmap = Bitmap.createScaledBitmap(
-                            bitmap,
-                            72,
-                            128,
-                            true
+                        val smallBitmap = createTimelineThumbnail(
+                            source = bitmap,
+                            maxSide = 160
                         )
 
                         saveBitmapToJpg(
@@ -427,6 +430,34 @@ private suspend fun loadCachedTimelineFramesProgressive(
     }
 }
 
+private fun createTimelineThumbnail(
+    source: Bitmap,
+    maxSide: Int
+): Bitmap {
+    val sourceWidth = source.width
+    val sourceHeight = source.height
+
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+        return source
+    }
+
+    val scale = if (sourceWidth >= sourceHeight) {
+        maxSide.toFloat() / sourceWidth.toFloat()
+    } else {
+        maxSide.toFloat() / sourceHeight.toFloat()
+    }
+
+    val targetWidth = (sourceWidth * scale).toInt().coerceAtLeast(1)
+    val targetHeight = (sourceHeight * scale).toInt().coerceAtLeast(1)
+
+    return Bitmap.createScaledBitmap(
+        source,
+        targetWidth,
+        targetHeight,
+        true
+    )
+}
+
 private fun saveBitmapToJpg(
     bitmap: Bitmap,
     file: File
@@ -435,7 +466,7 @@ private fun saveBitmapToJpg(
         FileOutputStream(file).use { output ->
             bitmap.compress(
                 Bitmap.CompressFormat.JPEG,
-                72,
+                76,
                 output
             )
         }
