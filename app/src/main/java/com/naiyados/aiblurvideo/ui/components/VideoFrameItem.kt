@@ -2,12 +2,12 @@ package com.naiyados.aiblurvideo.ui.components
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -55,6 +54,8 @@ import androidx.media3.common.Player
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.roundToLong
 
 private data class TimelineFrame(
@@ -70,7 +71,6 @@ fun VideoFrameStripSection(
     maxDurationSeconds: Int = 30
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
     val scrollState = rememberScrollState()
 
     val frames = remember(videoUri) {
@@ -101,7 +101,7 @@ fun VideoFrameStripSection(
 
         loading = true
 
-        loadTimelineFramesProgressive(
+        loadCachedTimelineFramesProgressive(
             context = context,
             videoUri = videoUri,
             maxDurationSeconds = maxDurationSeconds,
@@ -109,7 +109,11 @@ fun VideoFrameStripSection(
                 durationMs = duration
             },
             onFrame = { frame ->
-                frames.add(frame)
+                val exists = frames.any { it.timeMs == frame.timeMs }
+                if (!exists) {
+                    frames.add(frame)
+                    frames.sortBy { it.timeMs }
+                }
             }
         )
 
@@ -149,7 +153,8 @@ fun VideoFrameStripSection(
 
                 Text(
                     text = when {
-                        loading -> "Loading timeline..."
+                        loading && frames.isEmpty() -> "Loading timeline..."
+                        loading && frames.isNotEmpty() -> "Timeline"
                         errorText != null -> errorText ?: "Timeline"
                         else -> "Timeline"
                     },
@@ -241,7 +246,6 @@ private fun FixedCenterTimeline(
                 Spacer(modifier = Modifier.width(sidePadding))
             }
 
-            // Fixed center playhead
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -300,8 +304,11 @@ private fun TimelineSecondItem(
                 Image(
                     bitmap = frame.bitmap.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-                    contentScale = ContentScale.Crop
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .background(Color.Black),
+                    contentScale = ContentScale.Fit
                 )
             } else {
                 Box(
@@ -315,13 +322,32 @@ private fun TimelineSecondItem(
     }
 }
 
-private suspend fun loadTimelineFramesProgressive(
+private suspend fun loadCachedTimelineFramesProgressive(
     context: Context,
     videoUri: Uri,
     maxDurationSeconds: Int,
     onDuration: suspend (Long) -> Unit,
     onFrame: suspend (TimelineFrame) -> Unit
 ) {
+    val videoKey = videoUri.toString()
+        .hashCode()
+        .toString()
+        .replace("-", "m")
+
+    val cacheDir = File(context.cacheDir, "video_frames/$videoKey")
+    if (!cacheDir.exists()) {
+        cacheDir.mkdirs()
+    }
+
+    val durationFile = File(cacheDir, "duration.txt")
+    val cachedDurationMs = durationFile
+        .takeIf { it.exists() }
+        ?.readText()
+        ?.toLongOrNull()
+    if (cachedDurationMs != null && cachedDurationMs > 0L) {
+        onDuration(cachedDurationMs)
+    }
+
     withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
 
@@ -336,7 +362,7 @@ private suspend fun loadTimelineFramesProgressive(
             if (realDurationMs <= 0L) return@withContext
 
             val cappedDurationMs = realDurationMs.coerceAtMost(maxDurationSeconds * 1000L)
-
+            durationFile.writeText(cappedDurationMs.toString())
             withContext(Dispatchers.Main) {
                 onDuration(cappedDurationMs)
             }
@@ -344,26 +370,50 @@ private suspend fun loadTimelineFramesProgressive(
             var timeMs = 0L
 
             while (timeMs <= cappedDurationMs) {
-                val bitmap = retriever.getFrameAtTime(
-                    timeMs * 1000L,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                )
+                val cachedFile = File(cacheDir, "frame_$timeMs.jpg")
 
-                if (bitmap != null) {
-                    val smallBitmap = Bitmap.createScaledBitmap(
-                        bitmap,
-                        72,
-                        72,
-                        true
-                    )
+                val cachedBitmap = if (cachedFile.exists()) {
+                    BitmapFactory.decodeFile(cachedFile.absolutePath)
+                } else {
+                    null
+                }
 
+                if (cachedBitmap != null) {
                     withContext(Dispatchers.Main) {
                         onFrame(
                             TimelineFrame(
                                 timeMs = timeMs,
-                                bitmap = smallBitmap
+                                bitmap = cachedBitmap
                             )
                         )
+                    }
+                } else {
+                    val bitmap = retriever.getFrameAtTime(
+                        timeMs * 1000L,
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    )
+
+                    if (bitmap != null) {
+                        val smallBitmap = Bitmap.createScaledBitmap(
+                            bitmap,
+                            72,
+                            128,
+                            true
+                        )
+
+                        saveBitmapToJpg(
+                            bitmap = smallBitmap,
+                            file = cachedFile
+                        )
+
+                        withContext(Dispatchers.Main) {
+                            onFrame(
+                                TimelineFrame(
+                                    timeMs = timeMs,
+                                    bitmap = smallBitmap
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -376,6 +426,23 @@ private suspend fun loadTimelineFramesProgressive(
         } finally {
             retriever.release()
         }
+    }
+}
+
+private fun saveBitmapToJpg(
+    bitmap: Bitmap,
+    file: File
+) {
+    try {
+        FileOutputStream(file).use { output ->
+            bitmap.compress(
+                Bitmap.CompressFormat.JPEG,
+                72,
+                output
+            )
+        }
+    } catch (_: Throwable) {
+        // Ignore cache save errors
     }
 }
 
