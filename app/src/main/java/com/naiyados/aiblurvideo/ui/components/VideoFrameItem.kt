@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -48,6 +49,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -225,12 +227,14 @@ fun VideoFrameStripSection(
                             horizontalArrangement = Arrangement.Start
                         ) {
                             repeat(secondCount) { second ->
+                                val frameForSecond = frames.firstOrNull {
+                                    it.timeMs >= second * 1000L &&
+                                            it.timeMs < (second + 1) * 1000L
+                                }
+
                                 TimelineSecondBlock(
                                     second = second,
-                                    frames = frames.filter {
-                                        it.timeMs >= second * 1000L &&
-                                                it.timeMs < (second + 1) * 1000L
-                                    },
+                                    frame = frameForSecond,
                                     width = secondWidthDp
                                 )
                             }
@@ -273,8 +277,8 @@ fun VideoFrameStripSection(
 @Composable
 private fun TimelineSecondBlock(
     second: Int,
-    frames: List<TimelineFrame>,
-    width: androidx.compose.ui.unit.Dp
+    frame: TimelineFrame?,
+    width: Dp
 ) {
     Column(
         modifier = Modifier
@@ -296,32 +300,26 @@ private fun TimelineSecondBlock(
             )
         }
 
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color.Black),
-            horizontalArrangement = Arrangement.spacedBy(1.dp)
+                .background(Color.Black)
         ) {
-            if (frames.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(Color.White.copy(alpha = 0.08f))
+            if (frame != null) {
+                Image(
+                    bitmap = frame.bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
             } else {
-                frames.forEach { frame ->
-                    Image(
-                        bitmap = frame.bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.08f))
+                )
             }
         }
     }

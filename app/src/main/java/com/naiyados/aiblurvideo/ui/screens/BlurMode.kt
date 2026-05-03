@@ -151,8 +151,8 @@ fun VideoEditorScreen(
             modifier = Modifier.padding(horizontal = 16.dp),
             videoUri = videoUri,
             player = player,
-            framesPerSecond = 4,
-            maxDurationSeconds = 60
+            framesPerSecond = 1,
+            maxDurationSeconds = 30
         )
 
         Row(
