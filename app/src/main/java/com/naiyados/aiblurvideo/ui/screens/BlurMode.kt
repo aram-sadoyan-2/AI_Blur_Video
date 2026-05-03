@@ -97,13 +97,13 @@ fun VideoEditorScreen(
             .fillMaxSize()
             .background(AiBlurColors.Background)
             .padding(
-                top = topPadding + 8.dp,
-                bottom = bottomPadding + 14.dp
+                top = topPadding + 4.dp,
+                bottom = bottomPadding + 10.dp
             ),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         EditorHeaderBar(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 14.dp),
             onBackClick = {
                 isPlaying = false
                 player?.pause()
