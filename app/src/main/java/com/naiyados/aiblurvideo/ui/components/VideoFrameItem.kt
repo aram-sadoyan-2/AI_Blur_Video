@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredWidth
@@ -185,7 +186,7 @@ private fun FixedCenterTimeline(
 ) {
     val density = LocalDensity.current
 
-    val secondWidth = 64.dp
+    val secondWidth = 56.dp
     val secondWidthPx = with(density) { secondWidth.toPx() }
 
     val safeDurationMs = durationMs.coerceAtLeast(1L)
@@ -277,7 +278,8 @@ private fun TimelineSecondItem(
         modifier = Modifier
             .width(width)
             .height(76.dp)
-            .padding(end = 3.dp)
+            .padding(end = 1.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
@@ -295,7 +297,7 @@ private fun TimelineSecondItem(
 
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .width(54.dp)
                 .height(54.dp)
                 .clip(RoundedCornerShape(7.dp))
                 .background(Color.Black)
@@ -304,17 +306,13 @@ private fun TimelineSecondItem(
                 Image(
                     bitmap = frame.bitmap.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .background(Color.Black),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
+                        .fillMaxSize()
                         .background(Color.White.copy(alpha = 0.08f))
                 )
             }
@@ -329,7 +327,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
     onDuration: suspend (Long) -> Unit,
     onFrame: suspend (TimelineFrame) -> Unit
 ) {
-    val videoKey = videoUri.toString()
+    val videoKey = "v2_" + videoUri.toString()
         .hashCode()
         .toString()
         .replace("-", "m")
