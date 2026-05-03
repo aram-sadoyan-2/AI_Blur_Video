@@ -215,8 +215,6 @@ fun VideoEditorScreen(
             )
         }
 
-        var wasPlayingBeforeBlurDrag by remember { mutableStateOf(false) }
-
         BlurStrengthSlider(
             modifier = Modifier.padding(horizontal = 16.dp),
             value = blurStrength,

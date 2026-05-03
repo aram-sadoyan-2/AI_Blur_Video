@@ -58,7 +58,7 @@ fun VideoPreviewPanel(
     modifier: Modifier = Modifier
 ) {
     val blurRadiusPx = when (selectedMode) {
-        BlurMode.FullBlur -> blurStrength.coerceIn(0f, 1f) * 28f
+        BlurMode.FullBlur -> blurStrength.coerceIn(0f, 1f) * 55f
         else -> 0f
     }
 
