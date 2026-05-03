@@ -366,7 +366,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
     onDuration: suspend (Long) -> Unit,
     onFrame: suspend (TimelineFrame) -> Unit
 ) {
-    val videoKey = "v11_" + videoUri.toString()
+    val videoKey = "v13_125ms_" + videoUri.toString()
         .hashCode()
         .toString()
         .replace("-", "m")
@@ -455,7 +455,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
                     }
                 }
 
-                timeMs += 1000L
+                timeMs += 125L
             }
         } catch (_: Throwable) {
             withContext(Dispatchers.Main) {
