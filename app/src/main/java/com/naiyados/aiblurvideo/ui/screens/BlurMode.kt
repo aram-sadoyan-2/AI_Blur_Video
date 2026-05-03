@@ -96,7 +96,6 @@ fun VideoEditorScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(AiBlurColors.Background)
-            .verticalScroll(rememberScrollState())
             .padding(
                 top = topPadding + 8.dp,
                 bottom = bottomPadding + 14.dp
@@ -118,7 +117,9 @@ fun VideoEditorScreen(
         )
 
         VideoPreviewPanel(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             player = player,
             selectedMode = selectedMode,
             blurStrength = blurStrength,
@@ -214,10 +215,15 @@ fun VideoEditorScreen(
             )
         }
 
+        var wasPlayingBeforeBlurDrag by remember { mutableStateOf(false) }
+
         BlurStrengthSlider(
             modifier = Modifier.padding(horizontal = 16.dp),
             value = blurStrength,
-            onValueChange = { blurStrength = it }
+            onValueChange = { value ->
+                blurStrength = value
+            }
+
         )
     }
 }

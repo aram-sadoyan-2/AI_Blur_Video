@@ -1,7 +1,7 @@
 package com.naiyados.aiblurvideo.ui.components
 
 import android.graphics.Matrix
-import android.graphics.RenderEffect
+import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.Shader
 import android.os.Build
 import android.view.TextureView
@@ -30,14 +30,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,18 +83,39 @@ fun VideoPreviewPanel(
                     .fillMaxHeight()
                     .aspectRatio(9f / 16f)
                     .background(Color.Black)
-                    .clipToBounds()
-                    .graphicsLayer {
-                        clip = true
-                    }
+                    .clipToBounds(),
+                contentAlignment = Alignment.Center
             ) {
                 if (player == null) {
                     EmptyPreview()
                 } else {
-                    PlayerTextureViewFit(
-                        player = player,
-                        blurRadiusPx = blurRadiusPx
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                clip = true
+
+                                renderEffect =
+                                    if (
+                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                        blurRadiusPx > 0.5f
+                                    ) {
+                                        AndroidRenderEffect
+                                            .createBlurEffect(
+                                                blurRadiusPx,
+                                                blurRadiusPx,
+                                                Shader.TileMode.CLAMP
+                                            )
+                                            .asComposeRenderEffect()
+                                    } else {
+                                        null
+                                    }
+                            }
+                    ) {
+                        PlayerTextureViewFit(
+                            player = player
+                        )
+                    }
                 }
 
                 Surface(
@@ -101,7 +123,10 @@ fun VideoPreviewPanel(
                         .align(Alignment.TopStart)
                         .padding(12.dp),
                     color = Color.Black.copy(alpha = 0.34f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.10f)
+                    )
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
@@ -127,7 +152,10 @@ fun VideoPreviewPanel(
                 Surface(
                     modifier = Modifier.align(Alignment.Center),
                     color = Color.Black.copy(alpha = 0.30f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f))
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.14f)
+                    )
                 ) {
                     IconButton(
                         onClick = onPlayPauseClick,
@@ -151,13 +179,14 @@ fun VideoPreviewPanel(
 }
 
 @Composable
-private fun PlayerTextureViewFit(
-    player: Player,
-    blurRadiusPx: Float
+fun PlayerTextureViewFit(
+    player: Player
 ) {
-    var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
+    var textureViewRef by remember {
+        mutableStateOf<TextureView?>(null)
+    }
 
-    AndroidView<FrameLayout>(
+    AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
             val container = FrameLayout(ctx).apply {
@@ -177,8 +206,13 @@ private fun PlayerTextureViewFit(
                 )
 
                 textureViewRef = this
+
+                /**
+                 * Important:
+                 * Set video TextureView only once.
+                 * Do not do this inside update.
+                 */
                 player.setVideoTextureView(this)
-                applyRenderBlur(blurRadiusPx)
 
                 addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
                     (view as? TextureView)?.post {
@@ -201,12 +235,14 @@ private fun PlayerTextureViewFit(
             val textureView = container.getChildAt(0) as? TextureView
             if (textureView != null) {
                 textureViewRef = textureView
-                player.setVideoTextureView(textureView)
-                textureView.applyRenderBlur(blurRadiusPx)
 
-                textureView.post {
-                    textureView.applyFitTransform(player.videoSize)
-                }
+                /**
+                 * Important:
+                 * Do not call player.setVideoTextureView(textureView) here.
+                 * Do not call setRenderEffect() on TextureView here.
+                 *
+                 * Blur is applied above with Compose graphicsLayer.
+                 */
             }
         },
         onRelease = { container ->
@@ -214,6 +250,7 @@ private fun PlayerTextureViewFit(
             if (textureView != null) {
                 player.clearVideoTextureView(textureView)
             }
+
             textureViewRef = null
         }
     )
@@ -237,24 +274,6 @@ private fun PlayerTextureViewFit(
 
         onDispose {
             player.removeListener(listener)
-        }
-    }
-}
-
-private fun TextureView.applyRenderBlur(
-    blurRadiusPx: Float
-) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (blurRadiusPx > 0f) {
-            setRenderEffect(
-                RenderEffect.createBlurEffect(
-                    blurRadiusPx,
-                    blurRadiusPx,
-                    Shader.TileMode.CLAMP
-                )
-            )
-        } else {
-            setRenderEffect(null)
         }
     }
 }

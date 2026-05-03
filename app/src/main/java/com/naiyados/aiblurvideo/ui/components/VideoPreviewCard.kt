@@ -16,6 +16,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import android.graphics.RenderEffect as AndroidRenderEffect
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -95,10 +98,33 @@ fun VideoPreviewCard(
         if (videoUri == null || player == null) {
             EmptyVideoPreview()
         } else {
-            PlayerTextureViewFit(
-                player = player,
-                blurRadiusPx = blurRadiusPx
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        clip = true
+
+                        renderEffect =
+                            if (
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                blurRadiusPx > 0.5f
+                            ) {
+                                AndroidRenderEffect
+                                    .createBlurEffect(
+                                        blurRadiusPx,
+                                        blurRadiusPx,
+                                        Shader.TileMode.CLAMP
+                                    )
+                                    .asComposeRenderEffect()
+                            } else {
+                                null
+                            }
+                    }
+            ) {
+                PlayerTextureViewFit(
+                    player = player
+                )
+            }
         }
 
         TopModeChip(
@@ -356,151 +382,6 @@ private fun SmallControlButton(
     }
 }
 
-@Composable
-private fun PlayerTextureViewFit(
-    player: Player,
-    blurRadiusPx: Float
-) {
-    var textureViewRef by remember {
-        mutableStateOf<TextureView?>(null)
-    }
-
-    AndroidView<TextureView>(
-        modifier = Modifier.fillMaxSize(),
-        factory = { ctx ->
-            TextureView(ctx).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-
-                textureViewRef = this
-                player.setVideoTextureView(this)
-                applyRenderBlur(blurRadiusPx)
-
-                addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                    (view as? TextureView)?.post {
-                        view.applyFitTransform(player.videoSize)
-                    }
-                }
-
-                post {
-                    applyFitTransform(player.videoSize)
-                }
-            }
-        },
-        update = { textureView ->
-            textureViewRef = textureView
-            player.setVideoTextureView(textureView)
-            textureView.applyRenderBlur(blurRadiusPx)
-
-            textureView.post {
-                textureView.applyFitTransform(player.videoSize)
-            }
-        },
-        onRelease = { textureView ->
-            player.clearVideoTextureView(textureView)
-            if (textureViewRef === textureView) {
-                textureViewRef = null
-            }
-        }
-    )
-
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onVideoSizeChanged(videoSize: VideoSize) {
-                textureViewRef?.post {
-                    textureViewRef?.applyFitTransform(videoSize)
-                }
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                textureViewRef?.post {
-                    textureViewRef?.applyFitTransform(player.videoSize)
-                }
-            }
-        }
-
-        player.addListener(listener)
-
-        onDispose {
-            player.removeListener(listener)
-        }
-    }
-}
-
-private fun TextureView.applyRenderBlur(
-    blurRadiusPx: Float
-) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (blurRadiusPx > 0f) {
-            setRenderEffect(
-                RenderEffect.createBlurEffect(
-                    blurRadiusPx,
-                    blurRadiusPx,
-                    Shader.TileMode.CLAMP
-                )
-            )
-        } else {
-            setRenderEffect(null)
-        }
-    }
-}
-
-private fun TextureView.applyFitTransform(
-    videoSize: VideoSize
-) {
-    val viewWidth = width.toFloat()
-    val viewHeight = height.toFloat()
-
-    val rawVideoWidth = videoSize.width
-    val rawVideoHeight = videoSize.height
-
-    if (
-        viewWidth <= 0f ||
-        viewHeight <= 0f ||
-        rawVideoWidth <= 0 ||
-        rawVideoHeight <= 0
-    ) {
-        setTransform(null)
-        return
-    }
-
-    val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) {
-        videoSize.pixelWidthHeightRatio
-    } else {
-        1f
-    }
-
-    val videoWidth = rawVideoWidth * pixelRatio
-    val videoHeight = rawVideoHeight.toFloat()
-
-    val viewAspect = viewWidth / viewHeight
-    val videoAspect = videoWidth / videoHeight
-
-    val scaleX: Float
-    val scaleY: Float
-
-    if (videoAspect > viewAspect) {
-        // Video is wider than view. Fit width, reduce height.
-        scaleX = 1f
-        scaleY = viewAspect / videoAspect
-    } else {
-        // Video is taller than view. Fit height, reduce width.
-        scaleX = videoAspect / viewAspect
-        scaleY = 1f
-    }
-
-    val matrix = Matrix()
-    matrix.setScale(
-        scaleX,
-        scaleY,
-        viewWidth / 2f,
-        viewHeight / 2f
-    )
-
-    setTransform(matrix)
-}
 
 @Composable
 private fun ModePreviewOverlay(
