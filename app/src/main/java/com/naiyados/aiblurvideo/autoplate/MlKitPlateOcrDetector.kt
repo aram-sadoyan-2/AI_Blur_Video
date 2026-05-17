@@ -31,7 +31,9 @@ class MlKitPlateOcrDetector {
                     boxes += AutoPlateBox(
                         timeMs = timeMs,
                         rect = RectF(rect),
-                        text = text
+                        text = text,
+                        frameWidth = bitmap.width,
+                        frameHeight = bitmap.height
                     )
                 }
             }

@@ -52,7 +52,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
+import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
+import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
 import com.naiyados.aiblurvideo.ui.components.EditorActionTool
 import com.naiyados.aiblurvideo.ui.components.EditorHeaderBar
@@ -106,6 +108,27 @@ fun VideoEditorScreen(
 
     var autoPlateBoxes by remember {
         mutableStateOf<List<AutoPlateBox>>(emptyList())
+    }
+
+    var currentPositionMs by remember {
+        mutableLongStateOf(0L)
+    }
+
+    val timeline = remember(autoPlateBoxes) {
+        AutoPlateTimeline(autoPlateBoxes)
+    }
+
+    val currentAutoPlateBoxes = if (selectedMode == BlurMode.AutoPlate) {
+        timeline.boxesAt(currentPositionMs)
+    } else {
+        emptyList()
+    }
+
+    LaunchedEffect(player) {
+        while (player != null) {
+            currentPositionMs = player.currentPosition
+            delay(80)
+        }
     }
 
     LaunchedEffect(clearScrubPreviewSignal) {
@@ -198,21 +221,19 @@ fun VideoEditorScreen(
                 }
             )
 
-            if (selectedMode == BlurMode.AutoPlate) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .width(170.dp)
-                        .height(46.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.Black.copy(alpha = 0.82f))
+            if (selectedMode == BlurMode.AutoPlate && currentAutoPlateBoxes.isNotEmpty()) {
+                AutoPlateOverlay(
+                    modifier = Modifier.fillMaxSize(),
+                    boxes = currentAutoPlateBoxes
                 )
+            }
 
+            if (selectedMode == BlurMode.AutoPlate) {
                 Text(
                     text = if (isAutoPlateScanning) {
                         "Scanning plates... Found: $autoPlateFoundCount"
                     } else {
-                        "Auto Plate test. Found: $autoPlateFoundCount"
+                        "At ${currentPositionMs}ms: ${currentAutoPlateBoxes.joinToString { it.text }}"
                     },
                     color = Color.White,
                     fontSize = 12.sp,
