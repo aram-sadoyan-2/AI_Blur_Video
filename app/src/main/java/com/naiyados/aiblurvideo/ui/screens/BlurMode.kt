@@ -55,6 +55,7 @@ import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
 import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
 import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
+import com.naiyados.aiblurvideo.autoplate.PlaybackRectSmoother
 import com.naiyados.aiblurvideo.autoplate.PlateTrackConfidence
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
 import com.naiyados.aiblurvideo.ui.components.EditorActionTool
@@ -140,12 +141,30 @@ fun VideoEditorScreen(
         emptyList()
     }
 
-    val displayAutoPlateBoxes = currentAutoPlateBoxes
+    val playbackSmoother = remember { PlaybackRectSmoother() }
+
+    val displayAutoPlateBoxes = if (
+        selectedMode == BlurMode.AutoPlate &&
+        autoPlateConfidence == PlateTrackConfidence.Medium &&
+        currentAutoPlateBoxes.isNotEmpty()
+    ) {
+        listOf(
+            currentAutoPlateBoxes.first().let { box ->
+                box.copy(rect = playbackSmoother.smooth(box.rect))
+            }
+        )
+    } else {
+        currentAutoPlateBoxes
+    }
+
+    LaunchedEffect(autoPlateBoxes) {
+        playbackSmoother.reset()
+    }
 
     LaunchedEffect(player) {
         while (player != null) {
             currentPositionMs = player.currentPosition
-            delay(80)
+            delay(50)
         }
     }
 

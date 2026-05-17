@@ -1,11 +1,13 @@
 package com.naiyados.aiblurvideo.autoplate.detection
 
 import android.graphics.RectF
+import com.naiyados.aiblurvideo.autoplate.PlateScoring
+
 /**
  * Smooths plate bounding boxes between sparse video frames (Magritte-style tracking).
  */
 class PlateTracker(
-    private val smoothAlpha: Float = 0.22f
+    private val smoothAlpha: Float = 0.14f
 ) {
     private var smoothedRect: RectF? = null
     private var missedFrames = 0
@@ -32,6 +34,11 @@ class PlateTracker(
 
         missedFrames = 0
         val clamped = clampToFrame(best.rect, frameWidth, frameHeight)
+
+        val previous = smoothedRect
+        if (previous != null && PlateScoring.isOutlierJump(previous, clamped)) {
+            return RectF(previous)
+        }
 
         smoothedRect = if (smoothedRect == null) {
             RectF(clamped)

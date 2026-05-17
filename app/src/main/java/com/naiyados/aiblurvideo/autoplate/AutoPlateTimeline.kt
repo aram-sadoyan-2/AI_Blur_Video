@@ -2,6 +2,7 @@ package com.naiyados.aiblurvideo.autoplate
 
 import android.graphics.RectF
 import android.util.Log
+import com.naiyados.aiblurvideo.autoplate.detection.PlateDetectorPipeline
 import kotlin.math.abs
 
 class AutoPlateTimeline(
@@ -19,7 +20,11 @@ class AutoPlateTimeline(
         val rawTrack = buildStableTrack(boxes)
         dominantText = PlateScoring.dominantText(rawTrack)
 
-        val plateTrack = buildPlateTrackForPlayback(boxes, rawTrack)
+        val plateTrack = if (isDetectorPlaceholderTrack(boxes)) {
+            rawTrack.ifEmpty { boxes.sortedBy { it.timeMs } }
+        } else {
+            buildPlateTrackForPlayback(boxes, rawTrack)
+        }
         val spread = computePositionSpread(plateTrack)
         val textConsistency = PlateScoring.textConsistencyRatio(plateTrack)
 
@@ -41,7 +46,19 @@ class AutoPlateTimeline(
         }
 
         keyframeTrack = if (maskMode == MaskMode.Keyframes) {
-            plateTrack.map { it.copy(rect = RectF(it.rect)) }
+            smoothTrackForPlayback(
+                densifyKeyframeTrack(
+                    medianSmoothTrack(
+                        removeBigJumps(
+                            filterVerticalOutliers(plateTrack)
+                        ),
+                        windowRadius = 2
+                    ),
+                    stepMs = KEYFRAME_STEP_MS,
+                    endTimeMs = videoDurationMs
+                ),
+                alpha = 0.32f
+            )
         } else {
             emptyList()
         }
@@ -59,12 +76,25 @@ class AutoPlateTimeline(
         )
     }
 
+    private fun isDetectorPlaceholderTrack(boxes: List<AutoPlateBox>): Boolean {
+        if (boxes.isEmpty()) return false
+        val placeholderCount = boxes.count {
+            PlateScoring.normalizeSimilarPlateText(it.text) ==
+                PlateDetectorPipeline.PLATE_PLACEHOLDER
+        }
+        return placeholderCount.toFloat() / boxes.size >= 0.65f
+    }
+
     private fun buildPlateTrackForPlayback(
         allBoxes: List<AutoPlateBox>,
         spatialTrack: List<AutoPlateBox>
     ): List<AutoPlateBox> {
         val dominant = PlateScoring.dominantText(spatialTrack)
             ?: PlateScoring.dominantText(allBoxes)
+
+        if (dominant == PlateDetectorPipeline.PLATE_PLACEHOLDER) {
+            return spatialTrack.sortedBy { it.timeMs }
+        }
 
         val byTime = if (dominant != null) {
             allBoxes.filter {
@@ -75,6 +105,75 @@ class AutoPlateTimeline(
         }.sortedBy { it.timeMs }
 
         return byTime.ifEmpty { spatialTrack.sortedBy { it.timeMs } }
+    }
+
+    /** Drops OCR reads on the hood/grille (wrong vertical band). */
+    private fun filterVerticalOutliers(track: List<AutoPlateBox>): List<AutoPlateBox> {
+        if (track.size < 4) return track
+
+        val medianY = medianFloat(track.map { it.rect.centerY() })
+        val medianHeight = medianFloat(track.map { it.rect.height() }).coerceAtLeast(1f)
+
+        return track.filter { box ->
+            abs(box.rect.centerY() - medianY) <= medianHeight * 2.2f
+        }
+    }
+
+    private fun medianSmoothTrack(
+        track: List<AutoPlateBox>,
+        windowRadius: Int = 1
+    ): List<AutoPlateBox> {
+        if (track.size < 3) {
+            return track.map { it.copy(rect = RectF(it.rect)) }
+        }
+
+        return track.mapIndexed { index, box ->
+            val from = (index - windowRadius).coerceAtLeast(0)
+            val to = (index + windowRadius).coerceAtMost(track.lastIndex)
+            val window = track.subList(from, to + 1)
+            box.copy(rect = medianRect(window))
+        }
+    }
+
+    /** Fill gaps so playback never jumps across multi-second holes. */
+    private fun densifyKeyframeTrack(
+        track: List<AutoPlateBox>,
+        stepMs: Long,
+        endTimeMs: Long = track.lastOrNull()?.timeMs ?: 0L
+    ): List<AutoPlateBox> {
+        if (track.size < 2 || stepMs <= 0L) return track
+
+        val template = track.first()
+        val result = mutableListOf<AutoPlateBox>()
+        var timeMs = track.first().timeMs
+        val lastTimeMs = maxOf(track.last().timeMs, endTimeMs)
+
+        while (timeMs <= lastTimeMs) {
+            result += template.copy(
+                timeMs = timeMs,
+                rect = interpolateRectAt(track, timeMs)
+            )
+            timeMs += stepMs
+        }
+
+        return result
+    }
+
+    private fun interpolateRectAt(track: List<AutoPlateBox>, timeMs: Long): RectF {
+        val first = track.first()
+        val last = track.last()
+
+        if (timeMs <= first.timeMs) return RectF(first.rect)
+        if (timeMs >= last.timeMs) return RectF(last.rect)
+
+        val before = track.filter { it.timeMs <= timeMs }.maxByOrNull { it.timeMs } ?: first
+        val after = track.filter { it.timeMs >= timeMs }.minByOrNull { it.timeMs } ?: last
+
+        if (before.timeMs == after.timeMs) return RectF(before.rect)
+
+        val gapMs = (after.timeMs - before.timeMs).coerceAtLeast(1L)
+        val progress = ((timeMs - before.timeMs).toFloat() / gapMs.toFloat()).coerceIn(0f, 1f)
+        return interpolateRect(before.rect, after.rect, smoothStep(progress))
     }
 
     fun boxesAt(currentTimeMs: Long): List<AutoPlateBox> {
@@ -116,7 +215,7 @@ class AutoPlateTimeline(
         } else {
             val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
                 .coerceIn(0f, 1f)
-            interpolateRect(before.rect, after.rect, progress)
+            interpolateRect(before.rect, after.rect, smoothStep(progress))
         }
 
         return listOf(
@@ -236,12 +335,15 @@ class AutoPlateTimeline(
         )
     }
 
-    private fun smoothTrackForPlayback(track: List<AutoPlateBox>): List<AutoPlateBox> {
+    private fun smoothTrackForPlayback(
+        track: List<AutoPlateBox>,
+        alpha: Float = 0.28f
+    ): List<AutoPlateBox> {
         if (track.isEmpty()) return track
 
         var smoothed = RectF(track.first().rect)
         return track.map { box ->
-            smoothed = smoothRect(smoothed, box.rect, 0.28f)
+            smoothed = smoothRect(smoothed, box.rect, alpha)
             box.copy(rect = RectF(smoothed))
         }
     }
@@ -355,5 +457,9 @@ class AutoPlateTimeline(
 
     private fun smoothStep(value: Float): Float {
         return value * value * (3f - 2f * value)
+    }
+
+    companion object {
+        private const val KEYFRAME_STEP_MS = 100L
     }
 }

@@ -71,7 +71,11 @@ class AutoPlateScanner(
                     detectStreak = if (boxes.isNotEmpty()) detectStreak + 1 else 0
                     bitmap.recycle()
 
-                    if (detectStreak >= 10 && hasFrameZeroDetection) {
+                    if (
+                        !pipeline.isUsingMlDetector &&
+                        detectStreak >= 10 &&
+                        hasFrameZeroDetection
+                    ) {
                         Log.d("AutoPlate", "Early exit: stable detections")
                         break
                     }

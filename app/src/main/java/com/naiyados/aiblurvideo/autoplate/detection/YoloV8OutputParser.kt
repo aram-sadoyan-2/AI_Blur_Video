@@ -67,23 +67,19 @@ object YoloV8OutputParser {
 
             if (bestConf < CONFIDENCE_THRESHOLD) continue
 
-            val scaleX = sourceWidth.toFloat() / inputWidth.toFloat()
-            val scaleY = sourceHeight.toFloat() / inputHeight.toFloat()
-
-            val x1 = (cx - w / 2f) * scaleX
-            val y1 = (cy - h / 2f) * scaleY
-            val x2 = (cx + w / 2f) * scaleX
-            val y2 = (cy + h / 2f) * scaleY
-
-            if (x2 <= x1 || y2 <= y1) continue
+            val rect = boxToFrameRect(
+                cx = cx,
+                cy = cy,
+                w = w,
+                h = h,
+                sourceWidth = sourceWidth,
+                sourceHeight = sourceHeight,
+                inputWidth = inputWidth,
+                inputHeight = inputHeight
+            ) ?: continue
 
             candidates += PlateDetection(
-                rect = RectF(
-                    x1.coerceIn(0f, sourceWidth.toFloat()),
-                    y1.coerceIn(0f, sourceHeight.toFloat()),
-                    x2.coerceIn(0f, sourceWidth.toFloat()),
-                    y2.coerceIn(0f, sourceHeight.toFloat())
-                ),
+                rect = rect,
                 confidence = bestConf
             )
         }
@@ -98,6 +94,51 @@ object YoloV8OutputParser {
         anchor: Int
     ): Float {
         return output[channel * shape[2] + anchor]
+    }
+
+    /**
+     * Ultralytics TFLite exports use normalized center boxes (0–1).
+     * Older / Keras exports use pixel coords on the model input size (e.g. 640).
+     */
+    internal fun boxToFrameRect(
+        cx: Float,
+        cy: Float,
+        w: Float,
+        h: Float,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        inputWidth: Int,
+        inputHeight: Int
+    ): RectF? {
+        val normalized = max(max(cx, cy), max(w, h)) <= 2.5f
+
+        val x1: Float
+        val y1: Float
+        val x2: Float
+        val y2: Float
+
+        if (normalized) {
+            x1 = (cx - w / 2f) * sourceWidth
+            y1 = (cy - h / 2f) * sourceHeight
+            x2 = (cx + w / 2f) * sourceWidth
+            y2 = (cy + h / 2f) * sourceHeight
+        } else {
+            val scaleX = sourceWidth.toFloat() / inputWidth.toFloat()
+            val scaleY = sourceHeight.toFloat() / inputHeight.toFloat()
+            x1 = (cx - w / 2f) * scaleX
+            y1 = (cy - h / 2f) * scaleY
+            x2 = (cx + w / 2f) * scaleX
+            y2 = (cy + h / 2f) * scaleY
+        }
+
+        if (x2 <= x1 || y2 <= y1) return null
+
+        return RectF(
+            x1.coerceIn(0f, sourceWidth.toFloat()),
+            y1.coerceIn(0f, sourceHeight.toFloat()),
+            x2.coerceIn(0f, sourceWidth.toFloat()),
+            y2.coerceIn(0f, sourceHeight.toFloat())
+        )
     }
 
     private fun applyNms(boxes: List<PlateDetection>): List<PlateDetection> {

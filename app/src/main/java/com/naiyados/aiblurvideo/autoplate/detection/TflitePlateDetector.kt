@@ -187,14 +187,27 @@ class TflitePlateDetector(
             val box = boxes.getOrNull(i) ?: continue
             if (box.size < 4) continue
 
-            val xmin = box[0] * scaleX
-            val ymin = box[1] * scaleY
-            val xmax = box[2] * scaleX
-            val ymax = box[3] * scaleY
-            if (xmax <= xmin || ymax <= ymin) continue
+            val rect = if (maxOf(box[0], box[1], box[2], box[3]) <= 2.5f) {
+                // xyxy normalized
+                RectF(
+                    box[0] * sourceWidth,
+                    box[1] * sourceHeight,
+                    box[2] * sourceWidth,
+                    box[3] * sourceHeight
+                )
+            } else {
+                // xyxy in model-input pixels
+                RectF(
+                    box[0] * scaleX,
+                    box[1] * scaleY,
+                    box[2] * scaleX,
+                    box[3] * scaleY
+                )
+            }
+            if (rect.width() <= 0f || rect.height() <= 0f) continue
 
             results += PlateDetection(
-                rect = RectF(xmin, ymin, xmax, ymax),
+                rect = rect,
                 confidence = confidence
             )
         }

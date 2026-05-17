@@ -61,11 +61,14 @@ class PlateDetectorPipeline(
 
             if (tracked != null) {
                 val bestConf = detections.maxOfOrNull { it.confidence } ?: 0f
+                if (bestConf < RECORD_CONFIDENCE) {
+                    return emptyList()
+                }
                 return listOf(
                     AutoPlateBox(
                         timeMs = timeMs,
                         rect = RectF(tracked),
-                        text = "PLATE",
+                        text = PLATE_PLACEHOLDER,
                         frameWidth = bitmap.width,
                         frameHeight = bitmap.height,
                         confidence = bestConf
@@ -84,6 +87,8 @@ class PlateDetectorPipeline(
 
     companion object {
         private const val MODEL_ASSET = "plate_detector.tflite"
+        private const val RECORD_CONFIDENCE = 0.18f
+        const val PLATE_PLACEHOLDER = "PLATE"
 
         private fun hasAsset(context: Context, name: String): Boolean {
             return try {
