@@ -6,9 +6,16 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/app/src/main/assets/plate_detector.tflite"
 PT="/tmp/yolov8_plate_best.pt"
 
-echo "Installing export dependencies..."
+echo "Installing export dependencies (one-time)..."
 python3 -m pip install --upgrade pip
-python3 -m pip install ultralytics "tensorflow>=2.16" tf_keras onnx onnx2tf onnx_graphsurgeon
+python3 -m pip install \
+  ultralytics \
+  "tensorflow>=2.16" \
+  tf_keras \
+  onnx \
+  onnx2tf \
+  onnx_graphsurgeon \
+  sng4onnx
 
 echo "Downloading YOLOv8 plate weights..."
 curl -L "https://huggingface.co/Koushim/yolov8-license-plate-detection/resolve/main/best.pt" -o "$PT"
@@ -20,7 +27,7 @@ m = YOLO("/tmp/yolov8_plate_best.pt")
 m.export(format="tflite", imgsz=640, int8=False)
 PY
 
-TFLITE="$(find /tmp /Users/aramsadoyan/AndroidStudioProjects/AIBlurVideo -name 'best_float32.tflite' 2>/dev/null | head -1)"
+TFLITE="$(find /tmp "$ROOT" -name 'best_float32.tflite' 2>/dev/null | head -1)"
 if [ -z "$TFLITE" ]; then
   echo "Export failed: best_float32.tflite not found"
   exit 1

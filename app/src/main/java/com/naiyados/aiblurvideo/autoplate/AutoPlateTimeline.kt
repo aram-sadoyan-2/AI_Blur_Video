@@ -41,7 +41,7 @@ class AutoPlateTimeline(
         }
 
         keyframeTrack = if (maskMode == MaskMode.Keyframes) {
-            smoothTrackForPlayback(plateTrack)
+            plateTrack.map { it.copy(rect = RectF(it.rect)) }
         } else {
             emptyList()
         }
@@ -116,7 +116,7 @@ class AutoPlateTimeline(
         } else {
             val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
                 .coerceIn(0f, 1f)
-            interpolateRect(before.rect, after.rect, smoothStep(progress))
+            interpolateRect(before.rect, after.rect, progress)
         }
 
         return listOf(

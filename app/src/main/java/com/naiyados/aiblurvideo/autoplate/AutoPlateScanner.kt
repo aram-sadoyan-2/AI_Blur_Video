@@ -33,8 +33,8 @@ class AutoPlateScanner(
             var detectStreak = 0
             var hasFrameZeroDetection = false
 
-            val stepMs = 200L
-            val maxFrames = 200
+            val stepMs = 100L
+            val maxFrames = 240
 
             Log.d(
                 "AutoPlate",
@@ -71,7 +71,7 @@ class AutoPlateScanner(
                     detectStreak = if (boxes.isNotEmpty()) detectStreak + 1 else 0
                     bitmap.recycle()
 
-                    if (detectStreak >= 6 && hasFrameZeroDetection) {
+                    if (detectStreak >= 10 && hasFrameZeroDetection) {
                         Log.d("AutoPlate", "Early exit: stable detections")
                         break
                     }
