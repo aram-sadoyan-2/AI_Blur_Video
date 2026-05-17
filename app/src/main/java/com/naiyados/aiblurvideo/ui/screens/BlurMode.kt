@@ -47,7 +47,18 @@ import com.naiyados.aiblurvideo.ui.model.BlurMode
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 import androidx.media3.exoplayer.SeekParameters
 import android.graphics.Bitmap
+import androidx.compose.material.icons.rounded.DirectionsCar
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun VideoEditorScreen(
@@ -142,21 +153,36 @@ fun VideoEditorScreen(
             }
         )
 
-        VideoPreviewPanel(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
-            player = player,
-            selectedMode = selectedMode,
-            blurStrength = blurStrength,
-            isPlaying = isPlaying,
-            scrubPreviewBitmap = scrubPreviewBitmap,
-            onPlayPauseClick = {
-                if (player != null) {
-                    isPlaying = !isPlaying
+                .weight(1f)
+        ) {
+            VideoPreviewPanel(
+                modifier = Modifier.fillMaxSize(),
+                player = player,
+                selectedMode = selectedMode,
+                blurStrength = blurStrength,
+                isPlaying = isPlaying,
+                scrubPreviewBitmap = scrubPreviewBitmap,
+                onPlayPauseClick = {
+                    if (player != null) {
+                        isPlaying = !isPlaying
+                    }
                 }
+            )
+
+            if (selectedMode == BlurMode.AutoPlate) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .width(170.dp)
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.82f))
+                )
             }
-        )
+        }
 
         PlaybackControlBar(
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -207,6 +233,16 @@ fun VideoEditorScreen(
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            EditorActionTool(
+                title = "Auto Plate",
+                icon = Icons.Rounded.DirectionsCar,
+                selected = selectedMode == BlurMode.AutoPlate,
+                onClick = {
+                    selectedMode = BlurMode.AutoPlate
+                    Log.d("AutoPlate", "Auto Plate clicked")
+                    // later: start auto plate scan here
+                }
+            )
             EditorActionTool(
                 title = "Full Blur",
                 icon = Icons.Rounded.BlurOn,
