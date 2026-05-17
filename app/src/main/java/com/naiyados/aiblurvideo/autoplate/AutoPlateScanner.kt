@@ -30,13 +30,17 @@ class AutoPlateScanner(
             var timeMs = 0L
             var frameCount = 0
 
-            val stepMs = 500L
-            val maxFrames = 80
+            // Smoother detection timeline.
+            // 250ms = 4 scans per second.
+            val stepMs = 100L
+
+            // 160 frames * 250ms = about 40 seconds max scan.
+            val maxFrames = 250
 
             while (timeMs <= durationMs && frameCount < maxFrames) {
                 val bitmap = retriever.getFrameAtTime(
                     timeMs * 1000L,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    MediaMetadataRetriever.OPTION_CLOSEST
                 )
 
                 if (bitmap != null) {
@@ -50,12 +54,11 @@ class AutoPlateScanner(
                     boxes.forEach { box ->
                         Log.d(
                             "AutoPlate",
-                            "time=${box.timeMs} text=${box.text} rect=${box.rect}"
+                            "time=${box.timeMs} text=${box.text} rect=${box.rect} frame=${box.frameWidth}x${box.frameHeight}"
                         )
                     }
 
                     onFoundCountChanged(allBoxes.size)
-
                     bitmap.recycle()
                 }
 
@@ -67,6 +70,8 @@ class AutoPlateScanner(
         } finally {
             retriever.release()
         }
+
+        Log.d("AutoPlate", "Raw scan finished. Boxes=${allBoxes.size}")
 
         allBoxes
     }
