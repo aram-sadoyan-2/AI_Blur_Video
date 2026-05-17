@@ -201,20 +201,36 @@ private fun FixedCenterTimeline(
         .coerceAtLeast(1)
         .coerceAtMost(maxDurationSeconds)
 
-    fun seekFromCurrentScroll() {
+    fun currentSeekMsFromScroll(): Long {
         val seconds = scrollState.value / secondWidthPx
 
-        val seekMs = (seconds * 1000f)
+        return (seconds * 1000f)
             .roundToLong()
             .coerceIn(0L, safeDurationMs)
+    }
 
-        latestOnSeekTo(seekMs)
+    fun updatePreviewOnly() {
+        val seekMs = currentSeekMsFromScroll()
 
         val previewFrame = frames.minByOrNull { frame ->
             kotlin.math.abs(frame.timeMs - seekMs)
         }
 
         latestOnScrubFrameChange(previewFrame?.bitmap)
+    }
+
+    fun finishSeek() {
+        val seekMs = currentSeekMsFromScroll()
+
+        val previewFrame = frames.minByOrNull { frame ->
+            kotlin.math.abs(frame.timeMs - seekMs)
+        }
+
+        latestOnScrubFrameChange(previewFrame?.bitmap)
+
+        // Seek only once on release.
+        // This avoids ExoPlayer lagging behind your finger.
+        latestOnSeekTo(seekMs)
     }
 
     BoxWithConstraints(
@@ -232,23 +248,26 @@ private fun FixedCenterTimeline(
                 .pointerInput(safeDurationMs, secondWidthPx, frames.size) {
                     detectDragGestures(
                         onDragStart = {
-                            seekFromCurrentScroll()
+                            updatePreviewOnly()
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
 
                             scrollState.dispatchRawDelta(-dragAmount.x)
 
-                            // Realtime preview while dragging
-                            seekFromCurrentScroll()
+                            // Show bitmap preview while dragging.
+                            // Do NOT seek ExoPlayer here.
+                            updatePreviewOnly()
                         },
                         onDragEnd = {
-                            seekFromCurrentScroll()
-                            latestOnScrubFrameChange(null)
+                            finishSeek()
+
+                            // Important:
+                            // Do NOT clear scrub preview here.
+                            // Parent will clear it after ExoPlayer renders final frame.
                         },
                         onDragCancel = {
-                            seekFromCurrentScroll()
-                            latestOnScrubFrameChange(null)
+                            finishSeek()
                         }
                     )
                 }

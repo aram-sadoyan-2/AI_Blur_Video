@@ -47,6 +47,7 @@ import com.naiyados.aiblurvideo.ui.model.BlurMode
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 import androidx.media3.exoplayer.SeekParameters
 import android.graphics.Bitmap
+import kotlinx.coroutines.delay
 
 @Composable
 fun VideoEditorScreen(
@@ -66,10 +67,26 @@ fun VideoEditorScreen(
     var blurStrength by remember { mutableFloatStateOf(0.45f) }
     var isPlaying by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
-    var lastTimelineSeekMs by remember { mutableLongStateOf(-1L) }
-    var lastTimelineSeekClockMs by remember { mutableLongStateOf(0L) }
     var scrubPreviewBitmap by remember {
         mutableStateOf<Bitmap?>(null)
+    }
+    var wasPlayingBeforeScrub by remember {
+        mutableStateOf(false)
+    }
+    var clearScrubPreviewSignal by remember {
+        mutableLongStateOf(0L)
+    }
+
+    LaunchedEffect(clearScrubPreviewSignal) {
+        if (clearScrubPreviewSignal > 0L) {
+            delay(420)
+            scrubPreviewBitmap = null
+            if (wasPlayingBeforeScrub && player != null) {
+                isPlaying = true
+                player.play()
+            }
+            wasPlayingBeforeScrub = false
+        }
     }
 
     LaunchedEffect(player, videoUri) {
@@ -166,11 +183,20 @@ fun VideoEditorScreen(
             videoUri = videoUri,
             maxDurationSeconds = 30,
             onSeekTo = { seekMs ->
-                Log.d("dwd", "SEEEEEk - $seekMs")
                 player?.seekTo(seekMs)
+
+                clearScrubPreviewSignal = SystemClock.elapsedRealtime()
             },
             onScrubFrameChange = { bitmap ->
-                scrubPreviewBitmap = bitmap
+                if (bitmap != null) {
+                    if (scrubPreviewBitmap == null) {
+                        wasPlayingBeforeScrub = isPlaying
+                        isPlaying = false
+                        player?.pause()
+                    }
+
+                    scrubPreviewBitmap = bitmap
+                }
             }
         )
 
