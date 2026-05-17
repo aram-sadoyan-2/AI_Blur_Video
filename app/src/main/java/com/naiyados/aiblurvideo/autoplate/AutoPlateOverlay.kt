@@ -24,12 +24,16 @@ fun AutoPlateOverlay(
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             boxes.forEach { box ->
-                val mappedRect = mapRectFitCenter(
-                    source = box.rect.expand(percent = 0.18f),
+                val transform = VideoCoordinateMapper.fitTransform(
                     frameWidth = box.frameWidth.toFloat(),
                     frameHeight = box.frameHeight.toFloat(),
                     viewWidth = viewWidth,
                     viewHeight = viewHeight
+                )
+
+                val mappedRect = VideoCoordinateMapper.frameToView(
+                    frameRect = box.rect.expand(percent = 0.12f),
+                    transform = transform
                 )
 
                 drawRoundRect(
@@ -52,37 +56,5 @@ private fun RectF.expand(percent: Float): RectF {
         top - dy,
         right + dx,
         bottom + dy
-    )
-}
-
-private fun mapRectFitCenter(
-    source: RectF,
-    frameWidth: Float,
-    frameHeight: Float,
-    viewWidth: Float,
-    viewHeight: Float
-): RectF {
-    val frameRatio = frameWidth / frameHeight
-    val viewRatio = viewWidth / viewHeight
-
-    val scale: Float
-    val offsetX: Float
-    val offsetY: Float
-
-    if (frameRatio > viewRatio) {
-        scale = viewWidth / frameWidth
-        offsetX = 0f
-        offsetY = (viewHeight - frameHeight * scale) / 2f
-    } else {
-        scale = viewHeight / frameHeight
-        offsetX = (viewWidth - frameWidth * scale) / 2f
-        offsetY = 0f
-    }
-
-    return RectF(
-        offsetX + source.left * scale,
-        offsetY + source.top * scale,
-        offsetX + source.right * scale,
-        offsetY + source.bottom * scale
     )
 }

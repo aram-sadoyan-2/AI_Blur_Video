@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
+import com.naiyados.aiblurvideo.autoplate.detection.PlateDetectorPipeline
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -11,16 +12,16 @@ class AutoPlateScanner(
     private val context: Context
 ) {
 
-    private val detector = MlKitPlateOcrDetector()
-
     suspend fun scan(
         videoUri: Uri,
         onFoundCountChanged: (Int) -> Unit
-    ): List<AutoPlateBox> = withContext(Dispatchers.IO) {
+    ): AutoPlateScanResult = withContext(Dispatchers.IO) {
+        val pipeline = PlateDetectorPipeline(context)
         val retriever = MediaMetadataRetriever()
         val allBoxes = mutableListOf<AutoPlateBox>()
 
         try {
+            pipeline.resetTrack()
             retriever.setDataSource(context, videoUri)
 
             val durationMs = retriever.extractMetadata(
@@ -29,12 +30,15 @@ class AutoPlateScanner(
 
             var timeMs = 0L
             var frameCount = 0
+            var detectStreak = 0
 
-            // OCR is heavy. 250ms is better than 100ms for stable testing.
-            val stepMs = 250L
+            val stepMs = 200L
+            val maxFrames = 200
 
-            // 160 * 250ms = about 40 seconds max scan.
-            val maxFrames = 160
+            Log.d(
+                "AutoPlate",
+                "Scan start detector=${if (pipeline.isUsingMlDetector) "TFLite+track" else "OCR-fallback"}"
+            )
 
             while (timeMs <= durationMs && frameCount < maxFrames) {
                 val bitmap = retriever.getFrameAtTime(
@@ -43,7 +47,7 @@ class AutoPlateScanner(
                 )
 
                 if (bitmap != null) {
-                    val boxes = detector.detect(
+                    val boxes = pipeline.detectFrame(
                         bitmap = bitmap,
                         timeMs = timeMs
                     )
@@ -53,25 +57,49 @@ class AutoPlateScanner(
                     boxes.forEach { box ->
                         Log.d(
                             "AutoPlate",
-                            "time=${box.timeMs} text=${box.text} rect=${box.rect} frame=${box.frameWidth}x${box.frameHeight} score=${PlateScoring.score(box)}"
+                            "time=${box.timeMs} conf=${box.confidence} rect=${box.rect}"
                         )
                     }
 
                     onFoundCountChanged(allBoxes.size)
+
+                    detectStreak = if (boxes.isNotEmpty()) detectStreak + 1 else 0
                     bitmap.recycle()
+
+                    if (detectStreak >= 8) {
+                        Log.d("AutoPlate", "Early exit: stable detections")
+                        break
+                    }
                 }
 
                 frameCount++
                 timeMs += stepMs
             }
+
+            Log.d("AutoPlate", "Scan finished. Boxes=${allBoxes.size}")
+
+            val timeline = AutoPlateTimeline(
+                boxes = allBoxes,
+                videoDurationMs = durationMs
+            )
+
+            AutoPlateScanResult(
+                boxes = allBoxes,
+                durationMs = durationMs,
+                confidence = timeline.confidence,
+                dominantText = timeline.dominantText
+            )
         } catch (e: Exception) {
             Log.e("AutoPlate", "Scan failed", e)
+            AutoPlateScanResult(
+                boxes = emptyList(),
+                durationMs = 0L,
+                confidence = PlateTrackConfidence.Low,
+                dominantText = null
+            )
         } finally {
             retriever.release()
+            pipeline.close()
         }
-
-        Log.d("AutoPlate", "Raw scan finished. Boxes=${allBoxes.size}")
-
-        allBoxes
     }
 }

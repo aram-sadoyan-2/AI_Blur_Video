@@ -55,6 +55,7 @@ import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
 import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
 import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
+import com.naiyados.aiblurvideo.autoplate.PlateTrackConfidence
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
 import com.naiyados.aiblurvideo.ui.components.EditorActionTool
 import com.naiyados.aiblurvideo.ui.components.EditorHeaderBar
@@ -110,12 +111,27 @@ fun VideoEditorScreen(
         mutableStateOf<List<AutoPlateBox>>(emptyList())
     }
 
+    var autoPlateVideoDurationMs by remember {
+        mutableLongStateOf(0L)
+    }
+
+    var autoPlateConfidence by remember {
+        mutableStateOf(PlateTrackConfidence.Low)
+    }
+
+    var autoPlateDominantText by remember {
+        mutableStateOf<String?>(null)
+    }
+
     var currentPositionMs by remember {
         mutableLongStateOf(0L)
     }
 
-    val timeline = remember(autoPlateBoxes) {
-        AutoPlateTimeline(autoPlateBoxes)
+    val timeline = remember(autoPlateBoxes, autoPlateVideoDurationMs) {
+        AutoPlateTimeline(
+            boxes = autoPlateBoxes,
+            videoDurationMs = autoPlateVideoDurationMs
+        )
     }
 
     val currentAutoPlateBoxes = if (selectedMode == BlurMode.AutoPlate) {
@@ -230,10 +246,14 @@ fun VideoEditorScreen(
 
             if (selectedMode == BlurMode.AutoPlate) {
                 Text(
-                    text = if (isAutoPlateScanning) {
-                        "Scanning plates... Found: $autoPlateFoundCount"
-                    } else {
-                        "At ${currentPositionMs}ms: ${currentAutoPlateBoxes.joinToString { it.text }}"
+                    text = when {
+                        isAutoPlateScanning -> "AI scanning plate... $autoPlateFoundCount frames"
+                        autoPlateConfidence == PlateTrackConfidence.Low ->
+                            "Plate not found — try a clearer video"
+                        autoPlateConfidence == PlateTrackConfidence.High ->
+                            "Plate locked (AI detector)"
+                        else ->
+                            "Plate tracked (AI detector)"
                     },
                     color = Color.White,
                     fontSize = 12.sp,
@@ -305,22 +325,27 @@ fun VideoEditorScreen(
                             isAutoPlateScanning = true
                             autoPlateFoundCount = 0
                             autoPlateBoxes = emptyList()
+                            autoPlateConfidence = PlateTrackConfidence.Low
+                            autoPlateDominantText = null
 
                             val scanner = AutoPlateScanner(context)
-
-                            autoPlateBoxes = scanner.scan(
+                            val scanResult = scanner.scan(
                                 videoUri = videoUri,
                                 onFoundCountChanged = { count ->
                                     autoPlateFoundCount = count
                                 }
                             )
 
-                            autoPlateFoundCount = autoPlateBoxes.size
+                            autoPlateBoxes = scanResult.boxes
+                            autoPlateVideoDurationMs = scanResult.durationMs
+                            autoPlateConfidence = scanResult.confidence
+                            autoPlateDominantText = scanResult.dominantText
+                            autoPlateFoundCount = scanResult.boxes.size
                             isAutoPlateScanning = false
 
                             Log.d(
                                 "AutoPlate",
-                                "Scan finished. Found=${autoPlateBoxes.size}"
+                                "Scan finished. Found=${scanResult.boxes.size} confidence=${scanResult.confidence}"
                             )
                         }
                     }

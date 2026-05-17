@@ -40,6 +40,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    androidResources {
+        noCompress += "tflite"
+    }
+
+    packaging {
+        jniLibs {
+            pickFirsts += "**/libc++_shared.so"
+        }
+    }
 }
 
 dependencies {
@@ -65,6 +75,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.10.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
-   // implementation("androidx.media3:media3-ui:1.10.0")
 
+    // License plate detector (YOLOv8 TFLite + Flex ops for KerasCV export)
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
+
+    // implementation("androidx.media3:media3-ui:1.10.0")
 }
