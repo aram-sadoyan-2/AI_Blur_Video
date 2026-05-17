@@ -36,23 +36,29 @@ class MlKitPlateOcrDetector {
                         frameHeight = bitmap.height
                     )
                 ) {
+                    val score = PlateScoring.scoreRaw(
+                        text = text,
+                        rectWidth = rect.width().toFloat(),
+                        rectHeight = rect.height().toFloat(),
+                        centerYRatio = rect.centerY().toFloat() / bitmap.height,
+                        areaRatio = (rect.width() * rect.height()).toFloat() /
+                            (bitmap.width * bitmap.height).toFloat()
+                    )
                     candidates += AutoPlateBox(
                         timeMs = timeMs,
                         rect = RectF(rect),
                         text = text,
                         frameWidth = bitmap.width,
-                        frameHeight = bitmap.height
+                        frameHeight = bitmap.height,
+                        confidence = (score / 40f).coerceIn(0.05f, 1f)
                     )
                 }
             }
         }
 
-        // IMPORTANT:
-        // Return multiple candidates per frame.
-        // Timeline will choose the stable track.
         return candidates
             .sortedByDescending { PlateScoring.score(it) }
-            .take(5)
+            .take(1)
     }
 
     private fun cleanPlateText(value: String): String {

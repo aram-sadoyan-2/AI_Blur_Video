@@ -55,6 +55,7 @@ import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
 import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
 import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
+import com.naiyados.aiblurvideo.autoplate.PlaybackRectSmoother
 import com.naiyados.aiblurvideo.autoplate.PlateTrackConfidence
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
 import com.naiyados.aiblurvideo.ui.components.EditorActionTool
@@ -138,6 +139,27 @@ fun VideoEditorScreen(
         timeline.boxesAt(currentPositionMs)
     } else {
         emptyList()
+    }
+
+    val playbackRectSmoother = remember { PlaybackRectSmoother() }
+
+    var displayAutoPlateBoxes by remember {
+        mutableStateOf<List<AutoPlateBox>>(emptyList())
+    }
+
+    LaunchedEffect(autoPlateBoxes) {
+        playbackRectSmoother.reset()
+    }
+
+    LaunchedEffect(currentAutoPlateBoxes, currentPositionMs, autoPlateConfidence) {
+        displayAutoPlateBoxes = if (autoPlateConfidence == PlateTrackConfidence.High) {
+            currentAutoPlateBoxes
+        } else {
+            currentAutoPlateBoxes.map { box ->
+                val smoothedRect = playbackRectSmoother.smooth(box.rect)
+                box.copy(rect = smoothedRect)
+            }
+        }
     }
 
     LaunchedEffect(player) {
@@ -237,10 +259,10 @@ fun VideoEditorScreen(
                 }
             )
 
-            if (selectedMode == BlurMode.AutoPlate && currentAutoPlateBoxes.isNotEmpty()) {
+            if (selectedMode == BlurMode.AutoPlate && displayAutoPlateBoxes.isNotEmpty()) {
                 AutoPlateOverlay(
                     modifier = Modifier.fillMaxSize(),
-                    boxes = currentAutoPlateBoxes
+                    boxes = displayAutoPlateBoxes
                 )
             }
 
@@ -251,9 +273,9 @@ fun VideoEditorScreen(
                         autoPlateConfidence == PlateTrackConfidence.Low ->
                             "Plate not found — try a clearer video"
                         autoPlateConfidence == PlateTrackConfidence.High ->
-                            "Plate locked (AI detector)"
+                            "Plate locked — static shot"
                         else ->
-                            "Plate tracked (AI detector)"
+                            "Plate following — moving"
                     },
                     color = Color.White,
                     fontSize = 12.sp,

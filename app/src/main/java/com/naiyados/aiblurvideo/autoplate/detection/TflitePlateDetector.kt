@@ -6,7 +6,6 @@ import android.graphics.RectF
 import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.flex.FlexDelegate
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -14,8 +13,9 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
 /**
- * On-device license plate detector (YOLOv8-style, KerasCV export).
- * Model: [mithilai/YOLOv8-License-Plate](https://github.com/mithilai/YOLOv8-License-Plate) (MIT)
+ * License plate detector using a standard Ultralytics YOLOv8 TFLite export.
+ *
+ * Generate `plate_detector.tflite` with: `./scripts/export_plate_model.sh`
  */
 class TflitePlateDetector(
     context: Context
@@ -24,89 +24,96 @@ class TflitePlateDetector(
     private val interpreter: Interpreter
     private val inputWidth: Int
     private val inputHeight: Int
-    private val inputChannels: Int
     private val inputDataType: DataType
-
+    private val outputMode: OutputMode
+    private val yoloOutputShape: IntArray?
+    private val maxDetections: Int
     private val boxesOutputIndex: Int
     private val classesOutputIndex: Int
     private val confidenceOutputIndex: Int
-    private val maxDetections: Int
 
     init {
         val model = loadModelFile(context, MODEL_ASSET)
-        val options = Interpreter.Options().apply {
-            setNumThreads(4)
-            addDelegate(FlexDelegate())
-        }
-        interpreter = Interpreter(model, options)
+        interpreter = createInterpreter(model)
 
         val inputTensor = interpreter.getInputTensor(0)
         val inputShape = inputTensor.shape()
         inputDataType = inputTensor.dataType()
 
         inputHeight = when {
-            inputShape.size >= 4 && inputShape[3] == 3 -> inputShape[1]
-            inputShape.size >= 4 && inputShape[1] == 3 -> inputShape[2]
+            inputShape.size >= 4 && inputShape.getOrNull(3) == 3 -> inputShape[1]
+            inputShape.size >= 4 && inputShape.getOrNull(1) == 3 -> inputShape[2]
             else -> INPUT_SIZE
         }
         inputWidth = when {
-            inputShape.size >= 4 && inputShape[3] == 3 -> inputShape[2]
-            inputShape.size >= 4 && inputShape[1] == 3 -> inputShape[3]
+            inputShape.size >= 4 && inputShape.getOrNull(3) == 3 -> inputShape[2]
+            inputShape.size >= 4 && inputShape.getOrNull(1) == 3 -> inputShape[3]
             else -> INPUT_SIZE
         }
-        inputChannels = 3
 
-        val outputCount = interpreter.outputTensorCount
-        var boxesIdx = -1
-        var classesIdx = -1
-        var confidenceIdx = -1
-        val vectorOutputs = mutableListOf<Int>()
-
-        for (i in 0 until outputCount) {
-            val tensor = interpreter.getOutputTensor(i)
-            val name = tensor.name().lowercase()
-            val shape = tensor.shape()
-
-            when {
-                name.contains("box") -> boxesIdx = i
-                name.contains("class") -> classesIdx = i
-                name.contains("conf") -> confidenceIdx = i
-                shape.size >= 3 && shape.last() == 4 -> boxesIdx = i
-                shape.size == 2 || (shape.size == 3 && shape.last() != 4) -> vectorOutputs += i
+        when (interpreter.outputTensorCount) {
+            1 -> {
+                outputMode = OutputMode.YoloV8
+                yoloOutputShape = interpreter.getOutputTensor(0).shape()
+                maxDetections = 0
+                boxesOutputIndex = 0
+                classesOutputIndex = 0
+                confidenceOutputIndex = 0
             }
-        }
-
-        if (vectorOutputs.size >= 2) {
-            val scored = vectorOutputs.map { index ->
-                index to interpreter.getOutputTensor(index).shape().getOrElse(1) { 0 }
+            else -> {
+                outputMode = OutputMode.KerasBoxes
+                yoloOutputShape = null
+                boxesOutputIndex = findOutputIndex { name, shape ->
+                    name.contains("box") || (shape.size >= 3 && shape.last() == 4)
+                }
+                classesOutputIndex = findOutputIndex { name, shape ->
+                    name.contains("class") || (shape.size == 2 || (shape.size == 3 && shape.last() != 4))
+                }
+                confidenceOutputIndex = findOutputIndex { name, _ ->
+                    name.contains("conf")
+                }
+                maxDetections = interpreter.getOutputTensor(boxesOutputIndex).shape()
+                    .getOrElse(1) { 50 }
             }
-            val sorted = scored.sortedByDescending { it.second }
-            if (classesIdx == -1) classesIdx = sorted[0].first
-            if (confidenceIdx == -1) confidenceIdx = sorted.getOrNull(1)?.first ?: sorted[0].first
-        }
-
-        if (boxesIdx == -1) boxesIdx = 0
-        if (classesIdx == -1) classesIdx = 1.coerceAtMost(outputCount - 1)
-        if (confidenceIdx == -1) confidenceIdx = 2.coerceAtMost(outputCount - 1)
-
-        boxesOutputIndex = boxesIdx
-        classesOutputIndex = classesIdx
-        confidenceOutputIndex = confidenceIdx
-
-        val boxesShape = interpreter.getOutputTensor(boxesOutputIndex).shape()
-        maxDetections = when {
-            boxesShape.size >= 2 -> boxesShape[1]
-            else -> 50
         }
 
         Log.d(
             TAG,
-            "Ready input=${inputWidth}x$inputHeight outputs=[$boxesOutputIndex,$classesOutputIndex,$confidenceOutputIndex] maxDet=$maxDetections"
+            "Ready mode=$outputMode input=${inputWidth}x$inputHeight yoloShape=${yoloOutputShape?.contentToString()}"
         )
     }
 
     fun detect(bitmap: Bitmap): List<PlateDetection> {
         val inputBuffer = preprocess(bitmap)
+
+        return when (outputMode) {
+            OutputMode.YoloV8 -> {
+                val shape = yoloOutputShape ?: return emptyList()
+                val channels = shape[1]
+                val anchors = shape[2]
+                val output = Array(1) { Array(channels) { FloatArray(anchors) } }
+                interpreter.run(inputBuffer, output)
+                val flat = FloatArray(channels * anchors)
+                var index = 0
+                for (channel in 0 until channels) {
+                    for (anchor in 0 until anchors) {
+                        flat[index++] = output[0][channel][anchor]
+                    }
+                }
+                YoloV8OutputParser.parse(
+                    output = flat,
+                    shape = shape,
+                    sourceWidth = bitmap.width,
+                    sourceHeight = bitmap.height,
+                    inputWidth = inputWidth,
+                    inputHeight = inputHeight
+                )
+            }
+            OutputMode.KerasBoxes -> detectKerasOutputs(bitmap, inputBuffer)
+        }
+    }
+
+    private fun detectKerasOutputs(bitmap: Bitmap, inputBuffer: ByteBuffer): List<PlateDetection> {
         val boxesBuffer = Array(1) { Array(maxDetections) { FloatArray(4) } }
         val classesBuffer = Array(1) { FloatArray(maxDetections) }
         val confidenceBuffer = Array(1) { FloatArray(maxDetections) }
@@ -119,7 +126,7 @@ class TflitePlateDetector(
 
         interpreter.runForMultipleInputsOutputs(arrayOf(inputBuffer), outputs)
 
-        return parseDetections(
+        return parseKerasDetections(
             boxes = boxesBuffer[0],
             classes = classesBuffer[0],
             confidences = confidenceBuffer[0],
@@ -131,7 +138,7 @@ class TflitePlateDetector(
     private fun preprocess(bitmap: Bitmap): ByteBuffer {
         val scaled = Bitmap.createScaledBitmap(bitmap, inputWidth, inputHeight, true)
         val bytesPerChannel = if (inputDataType == DataType.UINT8) 1 else 4
-        val buffer = ByteBuffer.allocateDirect(bytesPerChannel * inputWidth * inputHeight * inputChannels)
+        val buffer = ByteBuffer.allocateDirect(bytesPerChannel * inputWidth * inputHeight * 3)
         buffer.order(ByteOrder.nativeOrder())
 
         val pixels = IntArray(inputWidth * inputHeight)
@@ -141,21 +148,18 @@ class TflitePlateDetector(
         }
 
         for (pixel in pixels) {
-            val r = (pixel shr 16) and 0xFF
-            val g = (pixel shr 8) and 0xFF
-            val b = pixel and 0xFF
+            val r = ((pixel shr 16) and 0xFF) / 255f
+            val g = ((pixel shr 8) and 0xFF) / 255f
+            val b = (pixel and 0xFF) / 255f
 
-            when (inputDataType) {
-                DataType.UINT8 -> {
-                    buffer.put(r.toByte())
-                    buffer.put(g.toByte())
-                    buffer.put(b.toByte())
-                }
-                else -> {
-                    buffer.putFloat(r.toFloat())
-                    buffer.putFloat(g.toFloat())
-                    buffer.putFloat(b.toFloat())
-                }
+            if (inputDataType == DataType.UINT8) {
+                buffer.put((r * 255f).toInt().toByte())
+                buffer.put((g * 255f).toInt().toByte())
+                buffer.put((b * 255f).toInt().toByte())
+            } else {
+                buffer.putFloat(r)
+                buffer.putFloat(g)
+                buffer.putFloat(b)
             }
         }
 
@@ -163,7 +167,7 @@ class TflitePlateDetector(
         return buffer
     }
 
-    private fun parseDetections(
+    private fun parseKerasDetections(
         boxes: Array<FloatArray>,
         classes: FloatArray,
         confidences: FloatArray,
@@ -177,7 +181,6 @@ class TflitePlateDetector(
         for (i in 0 until maxDetections) {
             val confidence = confidences.getOrNull(i) ?: continue
             val classId = classes.getOrNull(i)?.toInt() ?: -1
-
             if (confidence < CONFIDENCE_THRESHOLD) continue
             if (classId == -1) continue
 
@@ -188,13 +191,7 @@ class TflitePlateDetector(
             val ymin = box[1] * scaleY
             val xmax = box[2] * scaleX
             val ymax = box[3] * scaleY
-
             if (xmax <= xmin || ymax <= ymin) continue
-
-            val width = xmax - xmin
-            val height = ymax - ymin
-            val aspect = width / height.coerceAtLeast(1f)
-            if (aspect < 1.8f || aspect > 10f) continue
 
             results += PlateDetection(
                 rect = RectF(xmin, ymin, xmax, ymax),
@@ -205,14 +202,31 @@ class TflitePlateDetector(
         return results.sortedByDescending { it.confidence }.take(3)
     }
 
+    private fun findOutputIndex(
+        matcher: (name: String, shape: IntArray) -> Boolean
+    ): Int {
+        for (i in 0 until interpreter.outputTensorCount) {
+            val tensor = interpreter.getOutputTensor(i)
+            if (matcher(tensor.name().lowercase(), tensor.shape())) {
+                return i
+            }
+        }
+        return 0
+    }
+
     override fun close() {
         interpreter.close()
+    }
+
+    private enum class OutputMode {
+        YoloV8,
+        KerasBoxes
     }
 
     companion object {
         private const val TAG = "PlateDetector"
         private const val MODEL_ASSET = "plate_detector.tflite"
-        private const val INPUT_SIZE = 416
+        private const val INPUT_SIZE = 640
         private const val CONFIDENCE_THRESHOLD = 0.20f
 
         fun loadModelFile(context: Context, assetName: String): MappedByteBuffer {
@@ -225,6 +239,31 @@ class TflitePlateDetector(
                     )
                 }
             }
+        }
+
+        private fun createInterpreter(model: MappedByteBuffer): Interpreter {
+            val optionSets = listOf(
+                Interpreter.Options().apply { setNumThreads(4) },
+                Interpreter.Options().apply {
+                    setNumThreads(4)
+                    setUseXNNPACK(false)
+                }
+            )
+
+            var lastError: Exception? = null
+            for ((attempt, options) in optionSets.withIndex()) {
+                try {
+                    val interpreter = Interpreter(model, options)
+                    interpreter.allocateTensors()
+                    Log.d(TAG, "TFLite interpreter ready (attempt=${attempt + 1})")
+                    return interpreter
+                } catch (e: Exception) {
+                    lastError = e
+                    Log.w(TAG, "Interpreter init failed: ${e.message}")
+                }
+            }
+
+            throw lastError ?: IllegalStateException("Could not create TFLite interpreter")
         }
     }
 }

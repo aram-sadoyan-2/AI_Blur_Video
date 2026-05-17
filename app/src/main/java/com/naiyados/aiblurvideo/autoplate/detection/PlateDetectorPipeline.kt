@@ -20,10 +20,21 @@ class PlateDetectorPipeline(
     private val usingTflite: Boolean
 
     init {
-        tfliteDetector = try {
-            TflitePlateDetector(context)
-        } catch (e: Exception) {
-            android.util.Log.e("PlateDetector", "TFLite model failed, using OCR fallback", e)
+        tfliteDetector = if (hasAsset(context, MODEL_ASSET)) {
+            try {
+                TflitePlateDetector(context)
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "PlateDetector",
+                    "TFLite load failed, using OCR. Run scripts/export_plate_model.sh — ${e.message}"
+                )
+                null
+            }
+        } else {
+            android.util.Log.w(
+                "PlateDetector",
+                "Missing assets/$MODEL_ASSET — using OCR. Run: ./scripts/export_plate_model.sh"
+            )
             null
         }
         usingTflite = tfliteDetector != null
@@ -69,5 +80,18 @@ class PlateDetectorPipeline(
 
     override fun close() {
         tfliteDetector?.close()
+    }
+
+    companion object {
+        private const val MODEL_ASSET = "plate_detector.tflite"
+
+        private fun hasAsset(context: Context, name: String): Boolean {
+            return try {
+                context.assets.openFd(name).use { }
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 }

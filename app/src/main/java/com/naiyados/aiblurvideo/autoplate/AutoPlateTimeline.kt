@@ -18,23 +18,30 @@ class AutoPlateTimeline(
     init {
         val rawTrack = buildStableTrack(boxes)
         dominantText = PlateScoring.dominantText(rawTrack)
-        val stablePosition = isPositionStable(rawTrack)
+
+        val plateTrack = buildPlateTrackForPlayback(boxes, rawTrack)
+        val spread = computePositionSpread(plateTrack)
+        val textConsistency = PlateScoring.textConsistencyRatio(plateTrack)
+
+        // Constant mask only when the plate stays in one place (parked / static camera).
+        // If the plate moves in the frame, follow it with smoothed keyframes.
+        val useConstantMask = plateTrack.size >= 2 && !spread.movesSignificantly
 
         maskMode = when {
-            rawTrack.size < 3 -> MaskMode.None
-            stablePosition -> MaskMode.Constant
-            rawTrack.size >= 4 -> MaskMode.Keyframes
+            plateTrack.isEmpty() -> MaskMode.None
+            useConstantMask -> MaskMode.Constant
+            plateTrack.size >= 2 -> MaskMode.Keyframes
             else -> MaskMode.None
         }
 
         constantMask = if (maskMode == MaskMode.Constant) {
-            buildConstantMask(rawTrack, videoDurationMs)
+            buildConstantMask(plateTrack, videoDurationMs)
         } else {
             null
         }
 
         keyframeTrack = if (maskMode == MaskMode.Keyframes) {
-            rawTrack
+            smoothTrackForPlayback(plateTrack)
         } else {
             emptyList()
         }
@@ -47,8 +54,27 @@ class AutoPlateTimeline(
 
         Log.d(
             "AutoPlate",
-            "Timeline mode=$maskMode confidence=$confidence dominant=$dominantText trackSize=${rawTrack.size}"
+            "Timeline mode=$maskMode confidence=$confidence dominant=$dominantText " +
+                "trackSize=${plateTrack.size} textConsistency=$textConsistency spread=$spread"
         )
+    }
+
+    private fun buildPlateTrackForPlayback(
+        allBoxes: List<AutoPlateBox>,
+        spatialTrack: List<AutoPlateBox>
+    ): List<AutoPlateBox> {
+        val dominant = PlateScoring.dominantText(spatialTrack)
+            ?: PlateScoring.dominantText(allBoxes)
+
+        val byTime = if (dominant != null) {
+            allBoxes.filter {
+                PlateScoring.normalizeSimilarPlateText(it.text) == dominant
+            }
+        } else {
+            spatialTrack
+        }.sortedBy { it.timeMs }
+
+        return byTime.ifEmpty { spatialTrack.sortedBy { it.timeMs } }
     }
 
     fun boxesAt(currentTimeMs: Long): List<AutoPlateBox> {
@@ -85,20 +111,12 @@ class AutoPlateTimeline(
         }
 
         val gapMs = after.timeMs - before.timeMs
-        val rect = when {
-            gapMs <= 40L -> before.rect
-            PlateScoring.isOutlierJump(before.rect, after.rect) -> {
-                if (currentTimeMs - before.timeMs <= after.timeMs - currentTimeMs) {
-                    before.rect
-                } else {
-                    after.rect
-                }
-            }
-            else -> {
-                val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
-                    .coerceIn(0f, 1f)
-                interpolateRect(before.rect, after.rect, smoothStep(progress))
-            }
+        val rect = if (gapMs <= 40L) {
+            before.rect
+        } else {
+            val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
+                .coerceIn(0f, 1f)
+            interpolateRect(before.rect, after.rect, smoothStep(progress))
         }
 
         return listOf(
@@ -128,8 +146,8 @@ class AutoPlateTimeline(
             track
         }.ifEmpty { track }
 
-        val template = core.maxByOrNull { PlateScoring.score(it) } ?: track.first()
-        val rect = medianRect(core)
+        val template = pickAnchorBox(core)
+        val rect = RectF(template.rect)
 
         return template.copy(
             timeMs = 0L,
@@ -170,7 +188,7 @@ class AutoPlateTimeline(
                     tracks += mutableListOf(box)
                 } else {
                     bestTrack += box.copy(
-                        rect = smoothRect(last.rect, box.rect, 0.22f)
+                        rect = smoothRect(last.rect, box.rect, 0.14f)
                     )
                 }
             } else {
@@ -191,23 +209,78 @@ class AutoPlateTimeline(
         return removeBigJumps(best)
     }
 
-    private fun isPositionStable(track: List<AutoPlateBox>): Boolean {
-        if (track.size < 4) return false
+    private data class PositionSpread(
+        val movesSignificantly: Boolean,
+        val deltaX: Float = 0f,
+        val deltaY: Float = 0f,
+        val refWidth: Float = 0f
+    )
 
-        val dominant = PlateScoring.dominantText(track) ?: return false
-        val core = track.filter {
-            PlateScoring.normalizeSimilarPlateText(it.text) == dominant
+    private fun computePositionSpread(track: List<AutoPlateBox>): PositionSpread {
+        if (track.size < 2) {
+            return PositionSpread(movesSignificantly = false)
         }
-        if (core.size < 4) return false
 
-        val refWidth = medianFloat(core.map { it.rect.width() }).coerceAtLeast(1f)
-        val minX = core.minOf { it.rect.centerX() }
-        val maxX = core.maxOf { it.rect.centerX() }
-        val minY = core.minOf { it.rect.centerY() }
-        val maxY = core.maxOf { it.rect.centerY() }
+        val refWidth = medianFloat(track.map { it.rect.width() }).coerceAtLeast(1f)
+        val deltaX = track.maxOf { it.rect.centerX() } - track.minOf { it.rect.centerX() }
+        val deltaY = track.maxOf { it.rect.centerY() } - track.minOf { it.rect.centerY() }
 
-        return (maxX - minX) <= refWidth * 0.32f &&
-            (maxY - minY) <= refWidth * 0.22f
+        val movesSignificantly =
+            deltaX > refWidth * 0.38f || deltaY > refWidth * 0.28f
+
+        return PositionSpread(
+            movesSignificantly = movesSignificantly,
+            deltaX = deltaX,
+            deltaY = deltaY,
+            refWidth = refWidth
+        )
+    }
+
+    private fun smoothTrackForPlayback(track: List<AutoPlateBox>): List<AutoPlateBox> {
+        if (track.isEmpty()) return track
+
+        var smoothed = RectF(track.first().rect)
+        return track.map { box ->
+            smoothed = smoothRect(smoothed, box.rect, 0.28f)
+            box.copy(rect = RectF(smoothed))
+        }
+    }
+
+    /** Use the earliest strong detection — matches the good first-frame preview. */
+    private fun pickAnchorBox(boxes: List<AutoPlateBox>): AutoPlateBox {
+        if (boxes.size == 1) return boxes.first()
+
+        val topScore = boxes.maxOf { PlateScoring.score(it) }
+        val threshold = topScore * 0.88f
+        val strong = boxes.filter { PlateScoring.score(it) >= threshold }
+        return strong.minByOrNull { it.timeMs } ?: boxes.minBy { it.timeMs }
+    }
+
+    private fun confidenceWeightedRect(boxes: List<AutoPlateBox>): RectF {
+        if (boxes.isEmpty()) return RectF()
+        if (boxes.size == 1) return RectF(boxes.first().rect)
+
+        var totalWeight = 0f
+        var left = 0f
+        var top = 0f
+        var right = 0f
+        var bottom = 0f
+
+        boxes.forEach { box ->
+            val weight = box.confidence.coerceAtLeast(0.05f)
+            totalWeight += weight
+            left += box.rect.left * weight
+            top += box.rect.top * weight
+            right += box.rect.right * weight
+            bottom += box.rect.bottom * weight
+        }
+
+        return RectF(
+            left / totalWeight,
+            top / totalWeight,
+            right / totalWeight,
+            bottom / totalWeight
+        )
     }
 
     private fun removeBigJumps(track: List<AutoPlateBox>): List<AutoPlateBox> {

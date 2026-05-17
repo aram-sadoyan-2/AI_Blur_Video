@@ -89,6 +89,15 @@ object PlateScoring {
         return score
     }
 
+    fun textConsistencyRatio(track: List<AutoPlateBox>): Float {
+        if (track.isEmpty()) return 0f
+        val dominant = dominantText(track) ?: return 0f
+        val matches = track.count {
+            normalizeSimilarPlateText(it.text) == dominant
+        }
+        return matches.toFloat() / track.size.toFloat()
+    }
+
     fun textConsistencyBonus(track: List<AutoPlateBox>): Float {
         if (track.isEmpty()) return 0f
 

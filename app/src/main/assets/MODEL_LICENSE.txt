@@ -1,0 +1,4 @@
+plate_detector.tflite
+
+Source: https://github.com/mithilai/YOLOv8-License-Plate (MIT License)
+Model: edge_detector_quantized.tflite (YOLOv8 license plate detector, 416x416 input)

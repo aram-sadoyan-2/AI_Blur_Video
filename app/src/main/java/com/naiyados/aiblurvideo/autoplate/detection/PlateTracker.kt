@@ -5,7 +5,7 @@ import android.graphics.RectF
  * Smooths plate bounding boxes between sparse video frames (Magritte-style tracking).
  */
 class PlateTracker(
-    private val smoothAlpha: Float = 0.38f
+    private val smoothAlpha: Float = 0.22f
 ) {
     private var smoothedRect: RectF? = null
     private var missedFrames = 0
