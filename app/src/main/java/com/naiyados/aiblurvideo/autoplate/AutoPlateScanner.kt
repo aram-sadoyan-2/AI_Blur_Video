@@ -30,12 +30,11 @@ class AutoPlateScanner(
             var timeMs = 0L
             var frameCount = 0
 
-            // Smoother detection timeline.
-            // 250ms = 4 scans per second.
-            val stepMs = 100L
+            // OCR is heavy. 250ms is better than 100ms for stable testing.
+            val stepMs = 250L
 
-            // 160 frames * 250ms = about 40 seconds max scan.
-            val maxFrames = 250
+            // 160 * 250ms = about 40 seconds max scan.
+            val maxFrames = 160
 
             while (timeMs <= durationMs && frameCount < maxFrames) {
                 val bitmap = retriever.getFrameAtTime(
@@ -54,7 +53,7 @@ class AutoPlateScanner(
                     boxes.forEach { box ->
                         Log.d(
                             "AutoPlate",
-                            "time=${box.timeMs} text=${box.text} rect=${box.rect} frame=${box.frameWidth}x${box.frameHeight}"
+                            "time=${box.timeMs} text=${box.text} rect=${box.rect} frame=${box.frameWidth}x${box.frameHeight} score=${PlateScoring.score(box)}"
                         )
                     }
 

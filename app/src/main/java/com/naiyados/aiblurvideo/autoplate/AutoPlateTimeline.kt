@@ -1,14 +1,20 @@
 package com.naiyados.aiblurvideo.autoplate
 
 import android.graphics.RectF
+import android.util.Log
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 
 class AutoPlateTimeline(
     boxes: List<AutoPlateBox>
 ) {
     private val stableTrack: List<AutoPlateBox> = buildStableTrack(boxes)
+
+    init {
+        Log.d(
+            "AutoPlate",
+            "Timeline stableTrack size=${stableTrack.size}, texts=${stableTrack.take(12).joinToString { it.text }}"
+        )
+    }
 
     fun boxesAt(
         currentTimeMs: Long,
@@ -16,51 +22,58 @@ class AutoPlateTimeline(
     ): List<AutoPlateBox> {
         if (stableTrack.isEmpty()) return emptyList()
 
+        val first = stableTrack.first()
+        val last = stableTrack.last()
+
+        if (currentTimeMs < first.timeMs - toleranceMs) {
+            return emptyList()
+        }
+
+        if (currentTimeMs > last.timeMs + toleranceMs) {
+            return emptyList()
+        }
+
         val before = stableTrack
             .filter { it.timeMs <= currentTimeMs }
-            .minByOrNull { abs(currentTimeMs - it.timeMs) }
+            .maxByOrNull { it.timeMs }
 
         val after = stableTrack
             .filter { it.timeMs >= currentTimeMs }
-            .minByOrNull { abs(currentTimeMs - it.timeMs) }
+            .minByOrNull { it.timeMs }
 
         if (before == null && after == null) return emptyList()
 
         if (before == null) {
-            return listOf(after!!).filter {
-                abs(it.timeMs - currentTimeMs) <= toleranceMs
-            }
+            return listOf(after!!)
         }
 
         if (after == null) {
-            return listOf(before).filter {
-                abs(it.timeMs - currentTimeMs) <= toleranceMs
-            }
-        }
-
-        if (
-            abs(currentTimeMs - before.timeMs) > toleranceMs &&
-            abs(currentTimeMs - after.timeMs) > toleranceMs
-        ) {
-            return emptyList()
-        }
-
-        if (abs(before.timeMs - after.timeMs) <= 40L) {
             return listOf(before)
         }
 
-        val progress = ((currentTimeMs - before.timeMs).toFloat() /
-                (after.timeMs - before.timeMs).toFloat()
-                ).coerceIn(0f, 1f)
+        val gapMs = after.timeMs - before.timeMs
+
+        if (gapMs <= 40L) {
+            return listOf(before)
+        }
+
+        if (gapMs > toleranceMs) {
+            return listOf(before)
+        }
+
+        val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
+            .coerceIn(0f, 1f)
+
+        val rect = interpolateRect(
+            start = before.rect,
+            end = after.rect,
+            progress = smoothStep(progress)
+        )
 
         return listOf(
             before.copy(
                 timeMs = currentTimeMs,
-                rect = interpolateRect(
-                    start = before.rect,
-                    end = after.rect,
-                    progress = smoothStep(progress)
-                )
+                rect = rect
             )
         )
     }
@@ -71,7 +84,6 @@ class AutoPlateTimeline(
         if (boxes.isEmpty()) return emptyList()
 
         val sorted = boxes.sortedBy { it.timeMs }
-
         val tracks = mutableListOf<MutableList<AutoPlateBox>>()
 
         sorted.forEach { box ->
@@ -80,7 +92,7 @@ class AutoPlateTimeline(
                     val last = track.lastOrNull() ?: return@filter false
                     val timeDiff = box.timeMs - last.timeMs
 
-                    timeDiff in 0L..1200L && isNear(last.rect, box.rect)
+                    timeDiff in 0L..1400L && isNear(last.rect, box.rect)
                 }
                 .minByOrNull { track ->
                     centerDistance(track.last().rect, box.rect)
@@ -89,28 +101,54 @@ class AutoPlateTimeline(
             if (bestTrack != null) {
                 val last = bestTrack.last()
 
-                val smoothedBox = box.copy(
-                    rect = smoothRect(
-                        old = last.rect,
-                        new = box.rect,
-                        alpha = 0.18f
-                    )
+                val smoothedRect = smoothRect(
+                    old = last.rect,
+                    new = box.rect,
+                    alpha = 0.20f
                 )
 
-                bestTrack += smoothedBox
+                bestTrack += box.copy(rect = smoothedRect)
             } else {
                 tracks += mutableListOf(box)
             }
         }
 
         val best = tracks
+            .filter { it.size >= 3 }
             .maxWithOrNull(
                 compareBy<MutableList<AutoPlateBox>> { it.size }
+                    .thenBy { PlateScoring.textConsistencyBonus(it) }
                     .thenBy { averageArea(it) }
+                    .thenBy { trackScore(it) }
             )
-            ?: return emptyList()
+            ?: tracks.maxByOrNull { it.size }
+            ?: emptyList()
 
-        return best
+        Log.d(
+            "AutoPlate",
+            "Tracks=${tracks.size}, bestSize=${best.size}, bestTexts=${best.take(10).joinToString { it.text }}"
+        )
+
+        return removeBigJumps(best)
+    }
+
+    private fun removeBigJumps(
+        track: List<AutoPlateBox>
+    ): List<AutoPlateBox> {
+        if (track.size <= 2) return track
+
+        val result = mutableListOf<AutoPlateBox>()
+        result += track.first()
+
+        track.drop(1).forEach { box ->
+            val last = result.last()
+
+            if (!PlateScoring.isOutlierJump(last.rect, box.rect)) {
+                result += box
+            }
+        }
+
+        return result
     }
 
     private fun isNear(
@@ -123,8 +161,8 @@ class AutoPlateTimeline(
         val averageWidth = (old.width() + new.width()) / 2f
         val averageHeight = (old.height() + new.height()) / 2f
 
-        return dx <= averageWidth * 1.4f &&
-                dy <= averageHeight * 2.4f
+        return dx <= averageWidth * 2.4f &&
+                dy <= averageHeight * 3.0f
     }
 
     private fun centerDistance(
@@ -137,13 +175,27 @@ class AutoPlateTimeline(
     }
 
     private fun averageArea(
-        boxes: List<AutoPlateBox>
+        track: List<AutoPlateBox>
     ): Float {
-        if (boxes.isEmpty()) return 0f
+        if (track.isEmpty()) return 0f
 
-        return boxes.map {
-            it.rect.width() * it.rect.height()
-        }.average().toFloat()
+        return track
+            .map { it.rect.width() * it.rect.height() }
+            .average()
+            .toFloat()
+    }
+
+    private fun trackScore(
+        track: List<AutoPlateBox>
+    ): Float {
+        if (track.isEmpty()) return 0f
+
+        val avgScore = track
+            .map { PlateScoring.score(it) }
+            .average()
+            .toFloat()
+
+        return avgScore + PlateScoring.textConsistencyBonus(track)
     }
 
     private fun smoothRect(

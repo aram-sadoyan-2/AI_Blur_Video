@@ -47,17 +47,12 @@ class MlKitPlateOcrDetector {
             }
         }
 
-        // For MVP: hide only the biggest plate-like text per frame.
-        // This avoids hiding car model names, stickers, small random text, etc.
+        // IMPORTANT:
+        // Return multiple candidates per frame.
+        // Timeline will choose the stable track.
         return candidates
-            .sortedWith(
-                compareByDescending<AutoPlateBox> {
-                    it.rect.width() * it.rect.height()
-                }.thenByDescending {
-                    plateScore(it)
-                }
-            )
-            .take(1)
+            .sortedByDescending { PlateScoring.score(it) }
+            .take(5)
     }
 
     private fun cleanPlateText(value: String): String {
@@ -75,6 +70,8 @@ class MlKitPlateOcrDetector {
             .replace("]", "")
             .replace("(", "")
             .replace(")", "")
+            .replace("'", "")
+            .replace("\"", "")
     }
 
     private fun isPossiblePlate(
@@ -84,13 +81,13 @@ class MlKitPlateOcrDetector {
         frameHeight: Int
     ): Boolean {
         if (value.length !in 5..9) return false
+        if (!value.all { it.isLetterOrDigit() }) return false
 
         val digitCount = value.count { it.isDigit() }
         val letterCount = value.count { it.isLetter() }
 
         if (digitCount < 2) return false
-        if (letterCount < 1) return false
-        if (!value.all { it.isLetterOrDigit() }) return false
+        if (letterCount < 2) return false
 
         val rectWidth = rect.width().toFloat()
         val rectHeight = rect.height().toFloat()
@@ -101,49 +98,24 @@ class MlKitPlateOcrDetector {
         val area = rectWidth * rectHeight
         val frameArea = frameWidth.toFloat() * frameHeight.toFloat()
         val areaRatio = area / frameArea
+        val centerYRatio = rect.centerY().toFloat() / frameHeight.toFloat()
 
-        // License plates are usually wide rectangles.
-        // This removes vertical/square text like logos or model names.
-        if (aspectRatio < 2.4f) return false
-        if (aspectRatio > 8.8f) return false
+        // Plate text is usually wide.
+        if (aspectRatio < 2.3f) return false
+        if (aspectRatio > 9.5f) return false
 
-        // Remove very tiny OCR noise.
-        if (areaRatio < 0.00035f) return false
+        // Remove tiny OCR fragments.
+        if (areaRatio < 0.00030f) return false
 
-        // Usually plates are not in the very top area of the frame.
-        // This removes many random upper-screen texts.
-        val centerY = rect.centerY().toFloat()
-        if (centerY < frameHeight * 0.32f) return false
+        // Usually car plate is not in the top part.
+        if (centerYRatio < 0.40f) return false
 
-        return true
-    }
-
-    private fun plateScore(box: AutoPlateBox): Float {
-        val rect = box.rect
-        val width = rect.width().coerceAtLeast(1f)
-        val height = rect.height().coerceAtLeast(1f)
-        val aspectRatio = width / height
-
-        val text = box.text
-        val digits = text.count { it.isDigit() }
-        val letters = text.count { it.isLetter() }
-
-        var score = 0f
-
-        // Good plate text usually has both letters and digits.
-        score += digits * 1.2f
-        score += letters * 0.8f
-
-        // Prefer plate-like wide shape.
-        score += when {
-            aspectRatio in 3.0f..6.5f -> 4f
-            aspectRatio in 2.4f..8.8f -> 2f
-            else -> -3f
-        }
-
-        // Prefer larger candidates.
-        score += (width * height) / 1000f
-
-        return score
+        return PlateScoring.scoreRaw(
+            text = value,
+            rectWidth = rectWidth,
+            rectHeight = rectHeight,
+            centerYRatio = centerYRatio,
+            areaRatio = areaRatio
+        ) > 0f
     }
 }

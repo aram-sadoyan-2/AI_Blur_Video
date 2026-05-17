@@ -25,7 +25,7 @@ fun AutoPlateOverlay(
         Canvas(modifier = Modifier.fillMaxSize()) {
             boxes.forEach { box ->
                 val mappedRect = mapRectFitCenter(
-                    source = box.rect.expand(percent = 0.25f),
+                    source = box.rect.expand(percent = 0.18f),
                     frameWidth = box.frameWidth.toFloat(),
                     frameHeight = box.frameHeight.toFloat(),
                     viewWidth = viewWidth,
