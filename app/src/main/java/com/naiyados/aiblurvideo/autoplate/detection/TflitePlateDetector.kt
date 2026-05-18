@@ -6,6 +6,7 @@ import android.graphics.RectF
 import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.nnapi.NnApiDelegate
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -22,6 +23,7 @@ class TflitePlateDetector(
 ) : AutoCloseable {
 
     private val interpreter: Interpreter
+    private val delegates = mutableListOf<AutoCloseable>()
     private val inputWidth: Int
     private val inputHeight: Int
     private val inputDataType: DataType
@@ -34,7 +36,9 @@ class TflitePlateDetector(
 
     init {
         val model = loadModelFile(context, MODEL_ASSET)
-        interpreter = createInterpreter(model)
+        val loaded = createInterpreter(model)
+        interpreter = loaded.first
+        delegates += loaded.second
 
         val inputTensor = interpreter.getInputTensor(0)
         val inputShape = inputTensor.shape()
@@ -229,6 +233,13 @@ class TflitePlateDetector(
 
     override fun close() {
         interpreter.close()
+        delegates.forEach { delegate ->
+            try {
+                delegate.close()
+            } catch (_: Exception) {
+            }
+        }
+        delegates.clear()
     }
 
     private enum class OutputMode {
@@ -254,25 +265,41 @@ class TflitePlateDetector(
             }
         }
 
-        private fun createInterpreter(model: MappedByteBuffer): Interpreter {
-            val optionSets = listOf(
-                Interpreter.Options().apply { setNumThreads(4) },
-                Interpreter.Options().apply {
+        private fun createInterpreter(model: MappedByteBuffer): Pair<Interpreter, List<AutoCloseable>> {
+            var lastError: Exception? = null
+
+            try {
+                val nnapi = NnApiDelegate()
+                val options = Interpreter.Options().apply {
+                    addDelegate(nnapi)
+                    setNumThreads(2)
+                }
+                val interpreter = Interpreter(model, options)
+                interpreter.allocateTensors()
+                Log.d(TAG, "TFLite interpreter ready (NNAPI)")
+                return interpreter to listOf(nnapi)
+            } catch (e: Exception) {
+                lastError = e
+                Log.w(TAG, "NNAPI init failed: ${e.message}")
+            }
+
+            val cpuAttempts = listOf(
+                "CPU-4" to Interpreter.Options().apply { setNumThreads(4) },
+                "CPU-noXNN" to Interpreter.Options().apply {
                     setNumThreads(4)
                     setUseXNNPACK(false)
                 }
             )
 
-            var lastError: Exception? = null
-            for ((attempt, options) in optionSets.withIndex()) {
+            for ((label, options) in cpuAttempts) {
                 try {
                     val interpreter = Interpreter(model, options)
                     interpreter.allocateTensors()
-                    Log.d(TAG, "TFLite interpreter ready (attempt=${attempt + 1})")
-                    return interpreter
+                    Log.d(TAG, "TFLite interpreter ready ($label)")
+                    return interpreter to emptyList()
                 } catch (e: Exception) {
                     lastError = e
-                    Log.w(TAG, "Interpreter init failed: ${e.message}")
+                    Log.w(TAG, "Interpreter init failed ($label): ${e.message}")
                 }
             }
 

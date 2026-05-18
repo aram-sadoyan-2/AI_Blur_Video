@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.RectF
 import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
 import com.naiyados.aiblurvideo.autoplate.MlKitPlateOcrDetector
+import com.naiyados.aiblurvideo.autoplate.PlateMaskInsets
 
 /**
  * Primary: TFLite plate detector + temporal tracker.
@@ -18,6 +19,9 @@ class PlateDetectorPipeline(
     private val ocrFallback = MlKitPlateOcrDetector()
     private val tracker = PlateTracker()
     private val usingTflite: Boolean
+    private var anchorRect: RectF? = null
+    private var anchorWidth = 0f
+    private var anchorHeight = 0f
 
     init {
         tfliteDetector = if (hasAsset(context, MODEL_ASSET)) {
@@ -45,6 +49,9 @@ class PlateDetectorPipeline(
 
     fun resetTrack() {
         tracker.reset()
+        anchorRect = null
+        anchorWidth = 0f
+        anchorHeight = 0f
     }
 
     suspend fun detectFrame(
@@ -59,13 +66,36 @@ class PlateDetectorPipeline(
                 frameHeight = bitmap.height
             )
 
-            val best = detections.maxByOrNull { it.confidence } ?: return emptyList()
-            if (best.confidence < RECORD_CONFIDENCE) return emptyList()
+            val best = PlateDetectionSelector.pickBest(
+                detections = detections,
+                anchor = anchorRect,
+                frameWidth = bitmap.width,
+                frameHeight = bitmap.height,
+                minConfidence = RECORD_CONFIDENCE
+            ) ?: return emptyList()
+
+            val tightened = PlateMaskInsets.tighten(best.rect)
+            val (stableRect, nextSize) = if (anchorWidth <= 0f || anchorHeight <= 0f) {
+                anchorWidth = tightened.width()
+                anchorHeight = tightened.height()
+                tightened to (anchorWidth to anchorHeight)
+            } else {
+                PlateDetectionSelector.rectWithStableSize(
+                    centerRect = tightened,
+                    anchorWidth = anchorWidth,
+                    anchorHeight = anchorHeight,
+                    sizeAlpha = SIZE_UPDATE_ALPHA
+                )
+            }
+
+            anchorWidth = nextSize.first
+            anchorHeight = nextSize.second
+            anchorRect = RectF(stableRect)
 
             return listOf(
                 AutoPlateBox(
                     timeMs = timeMs,
-                    rect = RectF(best.rect),
+                    rect = stableRect,
                     text = PLATE_PLACEHOLDER,
                     frameWidth = bitmap.width,
                     frameHeight = bitmap.height,
@@ -84,6 +114,7 @@ class PlateDetectorPipeline(
     companion object {
         private const val MODEL_ASSET = "plate_detector.tflite"
         private const val RECORD_CONFIDENCE = 0.12f
+        private const val SIZE_UPDATE_ALPHA = 0.08f
         const val PLATE_PLACEHOLDER = "PLATE"
 
         private fun hasAsset(context: Context, name: String): Boolean {

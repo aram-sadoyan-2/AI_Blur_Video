@@ -100,17 +100,101 @@ class AutoPlateTimeline(
         return byTime.ifEmpty { spatialTrack.sortedBy { it.timeMs } }
     }
 
-    /** TFLite: keep raw detections, drop teleports, fill timeline densely with linear motion. */
+    /** TFLite: drop wrong objects, lock plate size, move center only between keyframes. */
     private fun buildDetectorKeyframeTrack(
         track: List<AutoPlateBox>,
         videoDurationMs: Long
     ): List<AutoPlateBox> {
-        val cleaned = removeBigJumps(track)
+        val cleaned = lockPlateDimensions(
+            smoothDetectorCenters(
+                removeDetectorJumps(
+                    filterDetectorOutliers(track)
+                )
+            )
+        )
+        if (cleaned.size < 2) return cleaned
+
+        val maskWidth = medianFloat(cleaned.map { it.rect.width() })
+        val maskHeight = medianFloat(cleaned.map { it.rect.height() })
+
         return densifyKeyframeTrack(
             track = cleaned,
             stepMs = DETECTOR_KEYFRAME_STEP_MS,
             endTimeMs = videoDurationMs,
-            easeEdges = false
+            easeEdges = false,
+            fixedWidth = maskWidth,
+            fixedHeight = maskHeight
+        )
+    }
+
+    private fun filterDetectorOutliers(track: List<AutoPlateBox>): List<AutoPlateBox> {
+        if (track.size < 4) return track
+
+        val medianWidth = medianFloat(track.map { it.rect.width() }).coerceAtLeast(1f)
+        val medianHeight = medianFloat(track.map { it.rect.height() }).coerceAtLeast(1f)
+        val medianCenterY = medianFloat(track.map { it.rect.centerY() })
+
+        return track.filter { box ->
+            val aspect = box.rect.width() / box.rect.height().coerceAtLeast(1f)
+            val widthOk = box.rect.width() in medianWidth * 0.68f..medianWidth * 1.42f
+            val heightOk = box.rect.height() in medianHeight * 0.68f..medianHeight * 1.42f
+            val yOk = abs(box.rect.centerY() - medianCenterY) <= medianHeight * 1.6f
+            val aspectOk = aspect in 2.0f..8.5f
+
+            widthOk && heightOk && yOk && aspectOk
+        }
+    }
+
+    private fun removeDetectorJumps(track: List<AutoPlateBox>): List<AutoPlateBox> {
+        if (track.size < 2) return track
+
+        val result = mutableListOf(track.first())
+        track.drop(1).forEach { box ->
+            val previous = result.last()
+            val jump = PlateScoring.isOutlierJump(previous.rect, box.rect)
+            val sizeSpike = PlateScoring.isSizeOutlier(previous.rect, box.rect)
+            if (!jump && !sizeSpike) {
+                result += box
+            }
+        }
+        return result
+    }
+
+    private fun smoothDetectorCenters(track: List<AutoPlateBox>): List<AutoPlateBox> {
+        if (track.size < 3) return track
+
+        return track.mapIndexed { index, box ->
+            val from = (index - 1).coerceAtLeast(0)
+            val to = (index + 1).coerceAtMost(track.lastIndex)
+            val window = track.subList(from, to + 1)
+            val cx = medianFloat(window.map { it.rect.centerX() })
+            val cy = medianFloat(window.map { it.rect.centerY() })
+            applyFixedPlateSize(box, box.rect.width(), box.rect.height(), cx, cy)
+        }
+    }
+
+    private fun lockPlateDimensions(track: List<AutoPlateBox>): List<AutoPlateBox> {
+        if (track.isEmpty()) return track
+
+        val width = medianFloat(track.map { it.rect.width() })
+        val height = medianFloat(track.map { it.rect.height() })
+        return track.map { applyFixedPlateSize(it, width, height) }
+    }
+
+    private fun applyFixedPlateSize(
+        box: AutoPlateBox,
+        width: Float,
+        height: Float,
+        centerX: Float = box.rect.centerX(),
+        centerY: Float = box.rect.centerY()
+    ): AutoPlateBox {
+        return box.copy(
+            rect = RectF(
+                centerX - width / 2f,
+                centerY - height / 2f,
+                centerX + width / 2f,
+                centerY + height / 2f
+            )
         )
     }
 
@@ -165,7 +249,9 @@ class AutoPlateTimeline(
         track: List<AutoPlateBox>,
         stepMs: Long,
         endTimeMs: Long = track.lastOrNull()?.timeMs ?: 0L,
-        easeEdges: Boolean = true
+        easeEdges: Boolean = true,
+        fixedWidth: Float? = null,
+        fixedHeight: Float? = null
     ): List<AutoPlateBox> {
         if (track.size < 2 || stepMs <= 0L) return track
 
@@ -177,7 +263,13 @@ class AutoPlateTimeline(
         while (timeMs <= lastTimeMs) {
             result += template.copy(
                 timeMs = timeMs,
-                rect = interpolateRectAt(track, timeMs, easeEdges)
+                rect = interpolateRectAt(
+                    track = track,
+                    timeMs = timeMs,
+                    easeEdges = easeEdges,
+                    fixedWidth = fixedWidth,
+                    fixedHeight = fixedHeight
+                )
             )
             timeMs += stepMs
         }
@@ -188,7 +280,9 @@ class AutoPlateTimeline(
     private fun interpolateRectAt(
         track: List<AutoPlateBox>,
         timeMs: Long,
-        easeEdges: Boolean = true
+        easeEdges: Boolean = true,
+        fixedWidth: Float? = null,
+        fixedHeight: Float? = null
     ): RectF {
         val first = track.first()
         val last = track.last()
@@ -204,7 +298,18 @@ class AutoPlateTimeline(
         val gapMs = (after.timeMs - before.timeMs).coerceAtLeast(1L)
         val progress = ((timeMs - before.timeMs).toFloat() / gapMs.toFloat()).coerceIn(0f, 1f)
         val eased = if (easeEdges) smoothStep(progress) else progress
-        return interpolateRect(before.rect, after.rect, eased)
+
+        val width = fixedWidth ?: lerp(before.rect.width(), after.rect.width(), eased)
+        val height = fixedHeight ?: lerp(before.rect.height(), after.rect.height(), eased)
+        val cx = lerp(before.rect.centerX(), after.rect.centerX(), eased)
+        val cy = lerp(before.rect.centerY(), after.rect.centerY(), eased)
+
+        return RectF(
+            cx - width / 2f,
+            cy - height / 2f,
+            cx + width / 2f,
+            cy + height / 2f
+        )
     }
 
     fun boxesAt(currentTimeMs: Long): List<AutoPlateBox> {
@@ -243,7 +348,17 @@ class AutoPlateTimeline(
         val gapMs = after.timeMs - before.timeMs
         val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
             .coerceIn(0f, 1f)
-        val rect = interpolateRect(before.rect, after.rect, progress)
+        val rect = if (before.rect.width() == after.rect.width() &&
+            before.rect.height() == after.rect.height()
+        ) {
+            val cx = lerp(before.rect.centerX(), after.rect.centerX(), progress)
+            val cy = lerp(before.rect.centerY(), after.rect.centerY(), progress)
+            val halfW = before.rect.width() / 2f
+            val halfH = before.rect.height() / 2f
+            RectF(cx - halfW, cy - halfH, cx + halfW, cy + halfH)
+        } else {
+            interpolateRect(before.rect, after.rect, progress)
+        }
 
         return listOf(
             before.copy(

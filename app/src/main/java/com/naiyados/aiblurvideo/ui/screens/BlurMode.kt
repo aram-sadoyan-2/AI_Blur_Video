@@ -52,10 +52,13 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
+import com.naiyados.aiblurvideo.autoplate.AutoPlateLiveFollower
 import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
 import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
 import com.naiyados.aiblurvideo.autoplate.PlateTrackConfidence
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
 import com.naiyados.aiblurvideo.ui.components.EditorActionTool
 import com.naiyados.aiblurvideo.ui.components.EditorHeaderBar
@@ -127,6 +130,10 @@ fun VideoEditorScreen(
         mutableLongStateOf(0L)
     }
 
+    var livePlateBox by remember {
+        mutableStateOf<AutoPlateBox?>(null)
+    }
+
     val timeline = remember(autoPlateBoxes, autoPlateVideoDurationMs) {
         AutoPlateTimeline(
             boxes = autoPlateBoxes,
@@ -140,7 +147,42 @@ fun VideoEditorScreen(
         emptyList()
     }
 
-    val displayAutoPlateBoxes = currentAutoPlateBoxes
+    val displayAutoPlateBoxes = when {
+        selectedMode != BlurMode.AutoPlate -> emptyList()
+        isPlaying && livePlateBox != null -> listOf(livePlateBox!!)
+        currentAutoPlateBoxes.isNotEmpty() -> currentAutoPlateBoxes
+        else -> emptyList()
+    }
+
+    LaunchedEffect(isPlaying, selectedMode, videoUri, autoPlateConfidence) {
+        livePlateBox = null
+        if (
+            videoUri == null ||
+            selectedMode != BlurMode.AutoPlate ||
+            !isPlaying ||
+            autoPlateConfidence == PlateTrackConfidence.Low
+        ) {
+            return@LaunchedEffect
+        }
+
+        val follower = AutoPlateLiveFollower(context)
+        try {
+            follower.followWhilePlaying(
+                videoUri = videoUri,
+                readPositionMs = { player?.currentPosition ?: currentPositionMs },
+                shouldContinue = {
+                    isPlaying && selectedMode == BlurMode.AutoPlate
+                },
+                onBox = { box ->
+                    withContext(Dispatchers.Main) {
+                        livePlateBox = box
+                    }
+                }
+            )
+        } finally {
+            follower.close()
+        }
+    }
 
     LaunchedEffect(player) {
         while (player != null) {
@@ -254,8 +296,10 @@ fun VideoEditorScreen(
                             "Plate not found — try a clearer video"
                         autoPlateConfidence == PlateTrackConfidence.High ->
                             "Plate locked — static shot"
+                        isPlaying ->
+                            "Live plate follow"
                         else ->
-                            "Plate following — moving"
+                            "Plate track ready — press play"
                     },
                     color = Color.White,
                     fontSize = 12.sp,

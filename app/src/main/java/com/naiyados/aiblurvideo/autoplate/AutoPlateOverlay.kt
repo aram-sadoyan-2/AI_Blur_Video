@@ -32,29 +32,17 @@ fun AutoPlateOverlay(
                 )
 
                 val mappedRect = VideoCoordinateMapper.frameToView(
-                    frameRect = box.rect.expand(percent = 0.12f),
+                    frameRect = PlateMaskInsets.paddingForCover(box.rect),
                     transform = transform
                 )
 
                 drawRoundRect(
-                    color = Color.Black.copy(alpha = 0.86f),
+                    color = Color.Black,
                     topLeft = Offset(mappedRect.left, mappedRect.top),
                     size = Size(mappedRect.width(), mappedRect.height()),
-                    cornerRadius = CornerRadius(14f, 14f)
+                    cornerRadius = CornerRadius(10f, 10f)
                 )
             }
         }
     }
-}
-
-private fun RectF.expand(percent: Float): RectF {
-    val dx = width() * percent
-    val dy = height() * percent
-
-    return RectF(
-        left - dx,
-        top - dy,
-        right + dx,
-        bottom + dy
-    )
 }

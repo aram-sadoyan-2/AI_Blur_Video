@@ -144,6 +144,40 @@ object PlateScoring {
         return dx > averageWidth * 2.2f || dy > averageHeight * 2.6f
     }
 
+    fun isSizeOutlier(
+        reference: RectF,
+        candidate: RectF
+    ): Boolean {
+        val widthRatio = candidate.width() / reference.width().coerceAtLeast(1f)
+        val heightRatio = candidate.height() / reference.height().coerceAtLeast(1f)
+        return widthRatio !in 0.70f..1.40f || heightRatio !in 0.70f..1.40f
+    }
+
+    fun isPlateShaped(
+        rect: RectF,
+        frameWidth: Int,
+        frameHeight: Int
+    ): Boolean {
+        val aspect = rect.width() / rect.height().coerceAtLeast(1f)
+        val frameArea = frameWidth.toFloat() * frameHeight.coerceAtLeast(1)
+        val areaRatio = (rect.width() * rect.height()) / frameArea
+
+        return aspect in 2.0f..8.5f &&
+            areaRatio in 0.00012f..0.14f &&
+            rect.width() >= frameWidth * 0.04f
+    }
+
+    fun iou(first: RectF, second: RectF): Float {
+        val x1 = maxOf(first.left, second.left)
+        val y1 = maxOf(first.top, second.top)
+        val x2 = minOf(first.right, second.right)
+        val y2 = minOf(first.bottom, second.bottom)
+        val intersection = maxOf(0f, x2 - x1) * maxOf(0f, y2 - y1)
+        val union = first.width() * first.height() +
+            second.width() * second.height() - intersection
+        return if (union <= 0f) 0f else intersection / union
+    }
+
     private fun isUkPlate(value: String): Boolean {
         // Example: SN66XHZ
         return Regex("^[A-Z]{2}\\d{2}[A-Z]{3}$").matches(value)
