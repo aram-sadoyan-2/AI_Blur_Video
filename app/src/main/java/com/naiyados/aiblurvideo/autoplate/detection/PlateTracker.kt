@@ -7,11 +7,10 @@ import com.naiyados.aiblurvideo.autoplate.PlateScoring
  * Smooths plate bounding boxes between sparse video frames (Magritte-style tracking).
  */
 class PlateTracker(
-    private val smoothAlpha: Float = 0.14f
+    private val smoothAlpha: Float = 0.38f
 ) {
     private var smoothedRect: RectF? = null
     private var missedFrames = 0
-
     fun reset() {
         smoothedRect = null
         missedFrames = 0
@@ -26,7 +25,7 @@ class PlateTracker(
 
         if (best == null) {
             missedFrames++
-            return if (missedFrames <= 3) smoothedRect else {
+            return if (missedFrames <= 18) smoothedRect else {
                 smoothedRect = null
                 null
             }

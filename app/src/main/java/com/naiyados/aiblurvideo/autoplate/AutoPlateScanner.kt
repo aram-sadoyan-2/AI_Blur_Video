@@ -33,8 +33,8 @@ class AutoPlateScanner(
             var detectStreak = 0
             var hasFrameZeroDetection = false
 
-            val stepMs = 100L
-            val maxFrames = 240
+            val stepMs = if (pipeline.isUsingMlDetector) 50L else 100L
+            val maxFrames = if (pipeline.isUsingMlDetector) 480 else 240
 
             Log.d(
                 "AutoPlate",

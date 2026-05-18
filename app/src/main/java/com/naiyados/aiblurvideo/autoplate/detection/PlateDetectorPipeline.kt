@@ -53,29 +53,25 @@ class PlateDetectorPipeline(
     ): List<AutoPlateBox> {
         if (tfliteDetector != null) {
             val detections = tfliteDetector.detect(bitmap)
-            val tracked = tracker.update(
+            tracker.update(
                 detections = detections,
                 frameWidth = bitmap.width,
                 frameHeight = bitmap.height
             )
 
-            if (tracked != null) {
-                val bestConf = detections.maxOfOrNull { it.confidence } ?: 0f
-                if (bestConf < RECORD_CONFIDENCE) {
-                    return emptyList()
-                }
-                return listOf(
-                    AutoPlateBox(
-                        timeMs = timeMs,
-                        rect = RectF(tracked),
-                        text = PLATE_PLACEHOLDER,
-                        frameWidth = bitmap.width,
-                        frameHeight = bitmap.height,
-                        confidence = bestConf
-                    )
+            val best = detections.maxByOrNull { it.confidence } ?: return emptyList()
+            if (best.confidence < RECORD_CONFIDENCE) return emptyList()
+
+            return listOf(
+                AutoPlateBox(
+                    timeMs = timeMs,
+                    rect = RectF(best.rect),
+                    text = PLATE_PLACEHOLDER,
+                    frameWidth = bitmap.width,
+                    frameHeight = bitmap.height,
+                    confidence = best.confidence
                 )
-            }
-            return emptyList()
+            )
         }
 
         return ocrFallback.detect(bitmap, timeMs)
@@ -87,7 +83,7 @@ class PlateDetectorPipeline(
 
     companion object {
         private const val MODEL_ASSET = "plate_detector.tflite"
-        private const val RECORD_CONFIDENCE = 0.18f
+        private const val RECORD_CONFIDENCE = 0.12f
         const val PLATE_PLACEHOLDER = "PLATE"
 
         private fun hasAsset(context: Context, name: String): Boolean {

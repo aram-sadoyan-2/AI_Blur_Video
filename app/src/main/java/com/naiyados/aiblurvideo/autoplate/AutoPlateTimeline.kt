@@ -20,8 +20,9 @@ class AutoPlateTimeline(
         val rawTrack = buildStableTrack(boxes)
         dominantText = PlateScoring.dominantText(rawTrack)
 
-        val plateTrack = if (isDetectorPlaceholderTrack(boxes)) {
-            rawTrack.ifEmpty { boxes.sortedBy { it.timeMs } }
+        val detectorTrack = isDetectorPlaceholderTrack(boxes)
+        val plateTrack = if (detectorTrack) {
+            boxes.sortedBy { it.timeMs }
         } else {
             buildPlateTrackForPlayback(boxes, rawTrack)
         }
@@ -46,19 +47,11 @@ class AutoPlateTimeline(
         }
 
         keyframeTrack = if (maskMode == MaskMode.Keyframes) {
-            smoothTrackForPlayback(
-                densifyKeyframeTrack(
-                    medianSmoothTrack(
-                        removeBigJumps(
-                            filterVerticalOutliers(plateTrack)
-                        ),
-                        windowRadius = 2
-                    ),
-                    stepMs = KEYFRAME_STEP_MS,
-                    endTimeMs = videoDurationMs
-                ),
-                alpha = 0.32f
-            )
+            if (detectorTrack) {
+                buildDetectorKeyframeTrack(plateTrack, videoDurationMs)
+            } else {
+                buildOcrKeyframeTrack(plateTrack, videoDurationMs)
+            }
         } else {
             emptyList()
         }
@@ -107,6 +100,38 @@ class AutoPlateTimeline(
         return byTime.ifEmpty { spatialTrack.sortedBy { it.timeMs } }
     }
 
+    /** TFLite: keep raw detections, drop teleports, fill timeline densely with linear motion. */
+    private fun buildDetectorKeyframeTrack(
+        track: List<AutoPlateBox>,
+        videoDurationMs: Long
+    ): List<AutoPlateBox> {
+        val cleaned = removeBigJumps(track)
+        return densifyKeyframeTrack(
+            track = cleaned,
+            stepMs = DETECTOR_KEYFRAME_STEP_MS,
+            endTimeMs = videoDurationMs,
+            easeEdges = false
+        )
+    }
+
+    private fun buildOcrKeyframeTrack(
+        track: List<AutoPlateBox>,
+        videoDurationMs: Long
+    ): List<AutoPlateBox> {
+        return smoothTrackForPlayback(
+            densifyKeyframeTrack(
+                medianSmoothTrack(
+                    removeBigJumps(filterVerticalOutliers(track)),
+                    windowRadius = 2
+                ),
+                stepMs = KEYFRAME_STEP_MS,
+                endTimeMs = videoDurationMs,
+                easeEdges = true
+            ),
+            alpha = 0.28f
+        )
+    }
+
     /** Drops OCR reads on the hood/grille (wrong vertical band). */
     private fun filterVerticalOutliers(track: List<AutoPlateBox>): List<AutoPlateBox> {
         if (track.size < 4) return track
@@ -139,7 +164,8 @@ class AutoPlateTimeline(
     private fun densifyKeyframeTrack(
         track: List<AutoPlateBox>,
         stepMs: Long,
-        endTimeMs: Long = track.lastOrNull()?.timeMs ?: 0L
+        endTimeMs: Long = track.lastOrNull()?.timeMs ?: 0L,
+        easeEdges: Boolean = true
     ): List<AutoPlateBox> {
         if (track.size < 2 || stepMs <= 0L) return track
 
@@ -151,7 +177,7 @@ class AutoPlateTimeline(
         while (timeMs <= lastTimeMs) {
             result += template.copy(
                 timeMs = timeMs,
-                rect = interpolateRectAt(track, timeMs)
+                rect = interpolateRectAt(track, timeMs, easeEdges)
             )
             timeMs += stepMs
         }
@@ -159,7 +185,11 @@ class AutoPlateTimeline(
         return result
     }
 
-    private fun interpolateRectAt(track: List<AutoPlateBox>, timeMs: Long): RectF {
+    private fun interpolateRectAt(
+        track: List<AutoPlateBox>,
+        timeMs: Long,
+        easeEdges: Boolean = true
+    ): RectF {
         val first = track.first()
         val last = track.last()
 
@@ -173,7 +203,8 @@ class AutoPlateTimeline(
 
         val gapMs = (after.timeMs - before.timeMs).coerceAtLeast(1L)
         val progress = ((timeMs - before.timeMs).toFloat() / gapMs.toFloat()).coerceIn(0f, 1f)
-        return interpolateRect(before.rect, after.rect, smoothStep(progress))
+        val eased = if (easeEdges) smoothStep(progress) else progress
+        return interpolateRect(before.rect, after.rect, eased)
     }
 
     fun boxesAt(currentTimeMs: Long): List<AutoPlateBox> {
@@ -210,13 +241,9 @@ class AutoPlateTimeline(
         }
 
         val gapMs = after.timeMs - before.timeMs
-        val rect = if (gapMs <= 40L) {
-            before.rect
-        } else {
-            val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
-                .coerceIn(0f, 1f)
-            interpolateRect(before.rect, after.rect, smoothStep(progress))
-        }
+        val progress = ((currentTimeMs - before.timeMs).toFloat() / gapMs.toFloat())
+            .coerceIn(0f, 1f)
+        val rect = interpolateRect(before.rect, after.rect, progress)
 
         return listOf(
             before.copy(
@@ -461,5 +488,6 @@ class AutoPlateTimeline(
 
     companion object {
         private const val KEYFRAME_STEP_MS = 100L
+        private const val DETECTOR_KEYFRAME_STEP_MS = 50L
     }
 }
