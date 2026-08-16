@@ -22,6 +22,10 @@ android {
 
     buildTypes {
         release {
+            // Phones only — no x86/x86_64 emulator libs in the release artifact.
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -30,6 +34,7 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -76,9 +81,8 @@ dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
-    // License plate detector (YOLOv8 TFLite + Flex ops for KerasCV export)
+    // YOLOv8 plate_detector.tflite — standard TFLite ops only (no flex / select-tf-ops).
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
-    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
 
     // implementation("androidx.media3:media3-ui:1.10.0")
 }

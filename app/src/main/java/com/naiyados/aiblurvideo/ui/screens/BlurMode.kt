@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +58,7 @@ import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
 import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
 import com.naiyados.aiblurvideo.autoplate.PlateTrackConfidence
+import com.naiyados.aiblurvideo.autoplate.export.AutoPlateVideoExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
@@ -106,6 +108,10 @@ fun VideoEditorScreen(
         mutableStateOf(false)
     }
 
+    var autoPlateScanFrames by remember {
+        mutableIntStateOf(0)
+    }
+
     var autoPlateFoundCount by remember {
         mutableIntStateOf(0)
     }
@@ -128,6 +134,14 @@ fun VideoEditorScreen(
 
     var currentPositionMs by remember {
         mutableLongStateOf(0L)
+    }
+
+    var isExporting by remember {
+        mutableStateOf(false)
+    }
+
+    var exportProgress by remember {
+        mutableFloatStateOf(0f)
     }
 
     var livePlateBox by remember {
@@ -256,9 +270,57 @@ fun VideoEditorScreen(
                 onBackClick()
             },
             onSaveClick = {
+                if (isExporting) return@EditorHeaderBar
+
                 isPlaying = false
                 player?.pause()
-                onSaveClick()
+
+                if (
+                    selectedMode == BlurMode.AutoPlate &&
+                    videoUri != null &&
+                    autoPlateConfidence != PlateTrackConfidence.Low &&
+                    autoPlateBoxes.isNotEmpty()
+                ) {
+                    scope.launch {
+                        isExporting = true
+                        exportProgress = 0f
+                        try {
+                            val exportDurationMs = maxOf(
+                                autoPlateVideoDurationMs,
+                                player?.duration ?: 0L
+                            )
+                            val result = AutoPlateVideoExporter(context).export(
+                                inputUri = videoUri,
+                                timeline = timeline,
+                                durationMs = exportDurationMs,
+                                blurStrength = blurStrength,
+                                onProgress = { exportProgress = it }
+                            )
+                            Log.d(
+                                "AutoPlate",
+                                "Save: frames=${result.frameCount} blurred=${result.blurredFrames}"
+                            )
+                            val msg = if (result.blurredFrames > 0) {
+                                "Video saved — plate blurred on ${result.blurredFrames} frames"
+                            } else {
+                                "Video saved but plate was not blurred — re-scan Auto Plate first"
+                            }
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            onSaveClick()
+                        } catch (e: Exception) {
+                            Log.e("AutoPlate", "Export failed", e)
+                            Toast.makeText(
+                                context,
+                                "Export failed: ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } finally {
+                            isExporting = false
+                        }
+                    }
+                } else {
+                    onSaveClick()
+                }
             }
         )
 
@@ -291,7 +353,10 @@ fun VideoEditorScreen(
             if (selectedMode == BlurMode.AutoPlate) {
                 Text(
                     text = when {
-                        isAutoPlateScanning -> "AI scanning plate... $autoPlateFoundCount frames"
+                        isExporting ->
+                            "Exporting ${(exportProgress * 100).toInt()}%..."
+                        isAutoPlateScanning ->
+                            "Scanning frame $autoPlateScanFrames ($autoPlateFoundCount found)"
                         autoPlateConfidence == PlateTrackConfidence.Low ->
                             "Plate not found — try a clearer video"
                         autoPlateConfidence == PlateTrackConfidence.High ->
@@ -369,6 +434,7 @@ fun VideoEditorScreen(
                     if (videoUri != null && !isAutoPlateScanning) {
                         scope.launch {
                             isAutoPlateScanning = true
+                            autoPlateScanFrames = 0
                             autoPlateFoundCount = 0
                             autoPlateBoxes = emptyList()
                             autoPlateConfidence = PlateTrackConfidence.Low
@@ -377,8 +443,9 @@ fun VideoEditorScreen(
                             val scanner = AutoPlateScanner(context)
                             val scanResult = scanner.scan(
                                 videoUri = videoUri,
-                                onFoundCountChanged = { count ->
-                                    autoPlateFoundCount = count
+                                onProgress = { frames, found ->
+                                    autoPlateScanFrames = frames
+                                    autoPlateFoundCount = found
                                 }
                             )
 

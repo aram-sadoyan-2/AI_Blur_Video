@@ -14,7 +14,7 @@ class AutoPlateScanner(
 
     suspend fun scan(
         videoUri: Uri,
-        onFoundCountChanged: (Int) -> Unit
+        onProgress: suspend (framesScanned: Int, detectionsFound: Int) -> Unit
     ): AutoPlateScanResult = withContext(Dispatchers.IO) {
         val pipeline = PlateDetectorPipeline(context)
         val retriever = MediaMetadataRetriever()
@@ -41,6 +41,10 @@ class AutoPlateScanner(
                 "Scan start detector=${if (pipeline.isUsingMlDetector) "TFLite+track" else "OCR-fallback"}"
             )
 
+            withContext(Dispatchers.Main) {
+                onProgress(0, 0)
+            }
+
             while (timeMs <= durationMs && frameCount < maxFrames) {
                 val bitmap = retriever.getFrameAtTime(
                     timeMs * 1000L,
@@ -62,8 +66,6 @@ class AutoPlateScanner(
                         )
                     }
 
-                    onFoundCountChanged(allBoxes.size)
-
                     if (timeMs == 0L && boxes.isNotEmpty()) {
                         hasFrameZeroDetection = true
                     }
@@ -82,10 +84,14 @@ class AutoPlateScanner(
                 }
 
                 frameCount++
+                withContext(Dispatchers.Main) {
+                    onProgress(frameCount, allBoxes.size)
+                }
+
                 timeMs += stepMs
             }
 
-            Log.d("AutoPlate", "Scan finished. Boxes=${allBoxes.size}")
+            Log.d("AutoPlate", "Scan finished. Boxes=${allBoxes.size} frames=$frameCount")
 
             val timeline = AutoPlateTimeline(
                 boxes = allBoxes,

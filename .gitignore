@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Build outputs (APK/AAB can be 100MB+ — never commit)
+app/release/
+*.apk
+*.aab
