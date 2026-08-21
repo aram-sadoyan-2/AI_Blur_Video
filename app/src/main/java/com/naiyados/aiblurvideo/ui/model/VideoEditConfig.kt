@@ -11,6 +11,7 @@ data class VideoEditConfig(
     val blurMode: BlurMode = BlurMode.AutoPlate,
     val blurStrength: Float = 0.65f,
     val isPlateBlurActive: Boolean = true,
+    val isFaceBlurActive: Boolean = true,
     val filter: VideoFilter = VideoFilter.NONE,
     val filterIntensity: Float = 1.0f,
     val pixelateBlockSize: Int = 24,

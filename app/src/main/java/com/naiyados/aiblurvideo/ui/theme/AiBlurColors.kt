@@ -1,14 +1,50 @@
 package com.naiyados.aiblurvideo.ui.theme
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 object AiBlurColors {
-    val Background = Color(0xFF080A12)
-    val Panel = Color(0xFF141824)
+    val Background: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.background
 
-    val TextPrimary = Color.White
-    val TextSecondary = Color.White.copy(alpha = 0.65f)
+    val Panel: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.surface
+
+    val SurfaceVariant: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.surfaceVariant
+
+    val CardBackground: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.cardBackground
+
+    val Border: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.border
+
+    val TextPrimary: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.textPrimary
+
+    val TextSecondary: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.textSecondary
+
+    val TextTertiary: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.textTertiary
 
     val Pink = Color(0xFFFF5FA2)
     val Orange = Color(0xFFFF9E2C)
@@ -26,10 +62,8 @@ object AiBlurColors {
         )
     )
 
-    val DarkGradient = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF151827),
-            Color(0xFF080A12)
-        )
-    )
+    val DarkGradient: Brush
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalAppColors.current.backgroundGradient
 }

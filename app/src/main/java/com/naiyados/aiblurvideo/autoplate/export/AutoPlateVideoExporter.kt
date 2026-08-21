@@ -92,22 +92,29 @@ class AutoPlateVideoExporter(
         val sourceStepUs = (1_000_000L / frameRate * speedFactor).toLong()
         val totalFrames = max(1, ((targetDurationMs / speedFactor) * frameRate / 1000).toInt())
 
-        val probeRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            retriever.getScaledFrameAtTime(startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST, 1280, 720)
-                ?: retriever.getFrameAtTime(startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
-        } else {
-            retriever.getFrameAtTime(startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
-        } ?: throw IllegalStateException("Could not read video frame")
+        val rawMetaW = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()
+        val rawMetaH = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
+
+        val probeRaw = retriever.getFrameAtTime(startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
+            ?: throw IllegalStateException("Could not read video frame")
 
         val rotation = orientation.rotationDegrees
         val probe = VideoOrientation.toDisplayBitmap(probeRaw, rotation)
-        
+
+        val srcW = rawMetaW ?: probe.width
+        val srcH = rawMetaH ?: probe.height
+        val (displaySrcW, displaySrcH) = if (rotation == 90 || rotation == 270) {
+            srcH to srcW
+        } else {
+            srcW to srcH
+        }
+
         // Calculate dimensions with aspect ratio
         val (baseW, baseH) = if (config.aspectRatio != VideoAspectRatio.ORIGINAL) {
-            val crop = config.aspectRatio.calculateCropRect(probe.width, probe.height)
+            val crop = config.aspectRatio.calculateCropRect(displaySrcW, displaySrcH)
             Pair(crop.width().toInt(), crop.height().toInt())
         } else {
-            Pair(probe.width, probe.height)
+            Pair(displaySrcW, displaySrcH)
         }
         val (encodeWidth, encodeHeight) = config.exportSettings.calculateOutputDimensions(baseW, baseH)
         probe.recycle()
@@ -123,7 +130,7 @@ class AutoPlateVideoExporter(
 
         Log.d(
             TAG,
-            "Export startMs=$startMs endMs=$endMs speed=$speedFactor dim=${encodeWidth}x$encodeHeight " +
+            "Export startMs=$startMs endMs=$endMs speed=$speedFactor native=${displaySrcW}x$displaySrcH dim=${encodeWidth}x$encodeHeight " +
                     "bitrate=${config.exportSettings.bitrate.bps} filter=${config.filter.title} mode=${config.blurMode.label}"
         )
 
@@ -158,7 +165,7 @@ class AutoPlateVideoExporter(
                 coroutineContext.ensureActive()
 
                 val timeMs = sourceTimeUs / 1000L
-                val rawFrame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                val rawFrame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && (extractW < displaySrcW || extractH < displaySrcH)) {
                     retriever.getScaledFrameAtTime(
                         sourceTimeUs,
                         MediaMetadataRetriever.OPTION_CLOSEST,

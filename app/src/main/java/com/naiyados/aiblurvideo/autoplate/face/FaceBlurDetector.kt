@@ -6,6 +6,8 @@ import android.util.Log
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
+import com.naiyados.aiblurvideo.autoplate.DetectionTarget
 import kotlinx.coroutines.tasks.await
 
 object FaceBlurDetector {
@@ -17,6 +19,7 @@ object FaceBlurDetector {
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
             .setMinFaceSize(0.12f)
+            .enableTracking()
             .build()
         FaceDetection.getClient(options)
     }
@@ -37,6 +40,21 @@ object FaceBlurDetector {
         } catch (e: Exception) {
             Log.e(TAG, "Face detection error", e)
             emptyList()
+        }
+    }
+
+    suspend fun detectFaceBoxes(bitmap: Bitmap, timeMs: Long): List<AutoPlateBox> {
+        val rects = detectFaces(bitmap)
+        return rects.mapIndexed { index, rect ->
+            AutoPlateBox(
+                timeMs = timeMs,
+                rect = rect,
+                text = "FACE #${index + 1}",
+                frameWidth = bitmap.width,
+                frameHeight = bitmap.height,
+                confidence = 0.95f,
+                targetType = DetectionTarget.FACE
+            )
         }
     }
 }

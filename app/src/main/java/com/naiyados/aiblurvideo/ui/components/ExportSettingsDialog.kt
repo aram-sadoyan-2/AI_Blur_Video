@@ -18,9 +18,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Info
@@ -32,8 +34,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +58,9 @@ import com.naiyados.aiblurvideo.autoplate.export.ExportBitrate
 import com.naiyados.aiblurvideo.autoplate.export.ExportResolution
 import com.naiyados.aiblurvideo.autoplate.export.ExportSettings
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.AppThemeMode
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
+import com.naiyados.aiblurvideo.ui.theme.ThemeManager
 
 @Composable
 fun ExportSettingsDialog(
@@ -62,6 +70,9 @@ fun ExportSettingsDialog(
     onDismissRequest: () -> Unit,
     onConfirmExport: (ExportSettings) -> Unit
 ) {
+    val appColors = LocalAppColors.current
+    val currentThemeMode by ThemeManager.themeMode.collectAsState()
+
     var selectedResolution by remember { mutableStateOf(initialSettings.resolution) }
     var selectedBitrate by remember { mutableStateOf(initialSettings.bitrate) }
 
@@ -101,8 +112,8 @@ fun ExportSettingsDialog(
                 .fillMaxWidth(0.92f)
                 .clip(RoundedCornerShape(24.dp))
                 .testTag("export_configuration_dialog"),
-            color = Color(0xFF191924),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
+            color = appColors.surface,
+            border = BorderStroke(1.dp, appColors.border),
             shadowElevation = 24.dp
         ) {
             Column(
@@ -144,13 +155,13 @@ fun ExportSettingsDialog(
                         Column {
                             Text(
                                 text = if (isPreExportFlow) "Export Video" else "Export Settings",
-                                color = Color.White,
+                                color = appColors.textPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp
                             )
                             Text(
-                                text = "Configure resolution, bitrate & speed",
-                                color = Color.White.copy(alpha = 0.6f),
+                                text = "Configure resolution, bitrate & display",
+                                color = appColors.textSecondary,
                                 fontSize = 12.sp
                             )
                         }
@@ -163,7 +174,7 @@ fun ExportSettingsDialog(
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Close",
-                            tint = Color.White.copy(alpha = 0.7f)
+                            tint = appColors.textSecondary
                         )
                     }
                 }
@@ -185,7 +196,7 @@ fun ExportSettingsDialog(
 
                         Text(
                             text = selectedResolution.label,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = appColors.textSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -221,7 +232,7 @@ fun ExportSettingsDialog(
 
                         Text(
                             text = selectedBitrate.label,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = appColors.textSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -240,11 +251,77 @@ fun ExportSettingsDialog(
                     }
                 }
 
+                // Section 3: OLED Battery Saver / Dark Theme Toggle
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = appColors.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, appColors.border)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (appColors.isDark) AiBlurColors.Purple.copy(alpha = 0.25f)
+                                        else AiBlurColors.Orange.copy(alpha = 0.25f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (appColors.isDark) Icons.Rounded.DarkMode else Icons.Rounded.BatterySaver,
+                                    contentDescription = null,
+                                    tint = if (appColors.isDark) AiBlurColors.Purple else AiBlurColors.Orange,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = "OLED Dark Mode (Battery Saver)",
+                                    color = appColors.textPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = if (appColors.isDark) "Enabled • Reduces battery draw & eye strain" else "Disabled • Tap to enable deep dark power saving",
+                                    color = appColors.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = appColors.isDark,
+                            onCheckedChange = { isDarkChecked ->
+                                ThemeManager.setThemeMode(if (isDarkChecked) AppThemeMode.DARK else AppThemeMode.LIGHT)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = AiBlurColors.Pink,
+                                uncheckedThumbColor = appColors.textSecondary,
+                                uncheckedTrackColor = appColors.surfaceElevated
+                            )
+                        )
+                    }
+                }
+
                 // Size & Speed Estimation Card
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color.White.copy(alpha = 0.05f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
+                    color = if (appColors.isDark) Color.White.copy(alpha = 0.05f) else appColors.surfaceElevated,
+                    border = BorderStroke(1.dp, appColors.border)
                 ) {
                     Column(
                         modifier = Modifier
@@ -264,7 +341,7 @@ fun ExportSettingsDialog(
                             )
                             Text(
                                 text = speedLabel,
-                                color = Color.White,
+                                color = appColors.textPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp
                             )
@@ -286,7 +363,7 @@ fun ExportSettingsDialog(
                                 } else {
                                     String.format("Estimated Size: ~%.1f MB per minute", currentSettings.estimateMegabytesPerMinute())
                                 },
-                                color = Color.White.copy(alpha = 0.8f),
+                                color = appColors.textSecondary,
                                 fontSize = 12.sp
                             )
                         }
@@ -303,11 +380,11 @@ fun ExportSettingsDialog(
                         onClick = onDismissRequest,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                        border = BorderStroke(1.dp, appColors.border)
                     ) {
                         Text(
                             text = "Cancel",
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = appColors.textSecondary,
                             fontSize = 13.sp
                         )
                     }
@@ -352,13 +429,15 @@ private fun SettingOptionRow(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val appColors = LocalAppColors.current
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) AiBlurColors.Pink.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.04f),
+        color = if (isSelected) AiBlurColors.Pink.copy(alpha = if (appColors.isDark) 0.16f else 0.10f)
+                else appColors.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(
             width = 1.dp,
-            color = if (isSelected) AiBlurColors.Pink else Color.White.copy(alpha = 0.07f)
+            color = if (isSelected) AiBlurColors.Pink else appColors.border
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -372,13 +451,13 @@ private fun SettingOptionRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f),
+                    color = if (isSelected) appColors.textPrimary else appColors.textPrimary.copy(alpha = 0.85f),
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     fontSize = 13.5.sp
                 )
                 Text(
                     text = subtitle,
-                    color = if (isSelected) Color.White.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.5f),
+                    color = appColors.textSecondary,
                     fontSize = 11.sp
                 )
             }

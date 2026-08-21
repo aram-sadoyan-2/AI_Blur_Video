@@ -17,11 +17,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.StopCircle
@@ -49,6 +48,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.naiyados.aiblurvideo.autoplate.export.ExportSettings
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 
 @Composable
 fun ProcessingProgressDialog(
@@ -56,6 +56,7 @@ fun ProcessingProgressDialog(
     exportSettings: ExportSettings = ExportSettings(),
     onCancel: () -> Unit
 ) {
+    val appColors = LocalAppColors.current
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
@@ -81,9 +82,9 @@ fun ProcessingProgressDialog(
             modifier = Modifier
                 .fillMaxWidth(0.90f)
                 .clip(RoundedCornerShape(26.dp)),
-            color = Color(0xFF1B1B28),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
-            shadowElevation = 16.dp
+            color = if (appColors.isDark) Color(0xFF10131E) else appColors.surface,
+            border = BorderStroke(1.dp, appColors.border),
+            shadowElevation = if (appColors.isDark) 8.dp else 20.dp
         ) {
             Column(
                 modifier = Modifier
@@ -112,7 +113,7 @@ fun ProcessingProgressDialog(
                         modifier = Modifier.size(72.dp),
                         color = AiBlurColors.Pink,
                         strokeWidth = 3.dp,
-                        trackColor = Color.White.copy(alpha = 0.08f)
+                        trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.08f) else appColors.surfaceElevated
                     )
                     Icon(
                         imageVector = Icons.Rounded.Movie,
@@ -129,41 +130,73 @@ fun ProcessingProgressDialog(
                 ) {
                     Text(
                         text = "Processing Video",
-                        color = Color.White,
+                        color = appColors.textPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 19.sp
                     )
                     Text(
                         text = "Applying AI blur and re-encoding video frames",
-                        color = Color.White.copy(alpha = 0.65f),
+                        color = appColors.textSecondary,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center
                     )
                 }
 
-                // Settings Pill
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.06f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                // Settings Pill & Battery Saver Indicator
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (appColors.isDark) Color.White.copy(alpha = 0.06f) else appColors.surfaceElevated,
+                        border = BorderStroke(1.dp, appColors.border)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Memory,
-                            contentDescription = null,
-                            tint = AiBlurColors.Pink,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = "${exportSettings.resolution.label} • ${exportSettings.bitrate.label}",
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Memory,
+                                contentDescription = null,
+                                tint = AiBlurColors.Pink,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "${exportSettings.resolution.label} • ${exportSettings.bitrate.label}",
+                                color = appColors.textPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    if (appColors.isDark) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = AiBlurColors.Green.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, AiBlurColors.Green.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.BatterySaver,
+                                    contentDescription = null,
+                                    tint = AiBlurColors.Green,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "OLED Eco",
+                                    color = AiBlurColors.Green,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -179,7 +212,7 @@ fun ProcessingProgressDialog(
                     ) {
                         Text(
                             text = "Frame-by-frame encoding & saving",
-                            color = Color.White.copy(alpha = 0.6f),
+                            color = appColors.textSecondary,
                             fontSize = 12.sp
                         )
                         Text(
@@ -199,7 +232,7 @@ fun ProcessingProgressDialog(
                             .clip(RoundedCornerShape(4.dp))
                             .testTag("saving_progress_bar"),
                         color = AiBlurColors.Pink,
-                        trackColor = Color.White.copy(alpha = 0.12f)
+                        trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.12f) else appColors.surfaceElevated
                     )
                 }
 
@@ -238,7 +271,7 @@ fun ProcessingProgressDialog(
 
                 Text(
                     text = "Stops encoding immediately and frees system memory",
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = appColors.textTertiary,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center
                 )

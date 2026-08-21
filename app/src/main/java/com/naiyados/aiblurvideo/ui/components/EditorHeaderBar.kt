@@ -13,7 +13,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,18 +27,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 
 @Composable
 fun EditorHeaderBar(
     modifier: Modifier = Modifier,
     onBackClick: () -> Unit,
     onSettingsClick: () -> Unit = {},
+    onThemeToggleClick: () -> Unit = {},
     onSaveClick: () -> Unit
 ) {
+    val appColors = LocalAppColors.current
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -45,7 +52,9 @@ fun EditorHeaderBar(
     ) {
         IconButton(
             onClick = onBackClick,
-            modifier = Modifier.size(40.dp)
+            modifier = Modifier
+                .size(40.dp)
+                .testTag("editor_back_button")
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowBackIos,
@@ -66,9 +75,28 @@ fun EditorHeaderBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // Dark/Light Theme Quick Toggle
+        IconButton(
+            onClick = onThemeToggleClick,
+            modifier = Modifier
+                .size(36.dp)
+                .testTag("editor_theme_toggle_button")
+        ) {
+            Icon(
+                imageVector = if (appColors.isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                contentDescription = "Toggle Dark Mode",
+                tint = if (appColors.isDark) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(2.dp))
+
         IconButton(
             onClick = onSettingsClick,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier
+                .size(36.dp)
+                .testTag("editor_settings_button")
         ) {
             Icon(
                 imageVector = Icons.Rounded.Tune,
@@ -88,7 +116,9 @@ fun EditorHeaderBar(
                 containerColor = Color.White,
                 contentColor = Color.Black
             ),
-            modifier = Modifier.height(34.dp)
+            modifier = Modifier
+                .height(34.dp)
+                .testTag("editor_export_button")
         ) {
             Text(
                 text = "Export",

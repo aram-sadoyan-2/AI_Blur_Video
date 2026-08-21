@@ -41,8 +41,10 @@ object FrameEffectProcessor {
         // 1. Apply Blur / Mask Effects based on BlurMode
         when (config.blurMode) {
             BlurMode.AutoPlate -> {
-                if (config.isPlateBlurActive && timeline != null) {
-                    val boxes = timeline.boxesAt(timeMs)
+                val includePlates = config.isPlateBlurActive
+                val includeFaces = config.isFaceBlurActive
+                if ((includePlates || includeFaces) && timeline != null) {
+                    val boxes = timeline.boxesAt(timeMs, includePlates = includePlates, includeFaces = includeFaces)
                     for (box in boxes) {
                         val processed = PlateBitmapBlur.blurPlateRegion(current, box.rect, config.blurStrength)
                         if (processed != current && current != source) {
@@ -53,30 +55,42 @@ object FrameEffectProcessor {
                 }
             }
             BlurMode.FullBlur -> {
-                val blurred = fastBlur(current, config.blurStrength)
-                if (current != source) current.recycle()
+                val blurred = FastStackBlur.blur(current, config.blurStrength)
+                if (current != source && current != blurred) current.recycle()
                 current = blurred
             }
             BlurMode.Face -> {
-                // Throttle face detection to every ~150ms for 5x export acceleration
-                val faces = if (timeMs - lastFaceDetectTimeMs >= 150L || cachedFaceRects.isEmpty()) {
-                    val detected = FaceBlurDetector.detectFaces(current)
-                    if (detected.isNotEmpty() || cachedFaceRects.isEmpty()) {
-                        cachedFaceRects = detected
-                        lastFaceDetectTimeMs = timeMs
+                val timelineFaces = timeline?.faceBoxesAt(timeMs) ?: emptyList()
+                if (timelineFaces.isNotEmpty()) {
+                    for (box in timelineFaces) {
+                        val padded = PlateMaskInsets.paddingForCover(box.rect)
+                        val processed = PlateBitmapBlur.blurPlateRegion(current, padded, config.blurStrength)
+                        if (processed != current && current != source) {
+                            current.recycle()
+                        }
+                        current = processed
                     }
-                    cachedFaceRects
                 } else {
-                    cachedFaceRects
-                }
-
-                for (faceRect in faces) {
-                    val padded = PlateMaskInsets.paddingForCover(faceRect)
-                    val processed = PlateBitmapBlur.blurPlateRegion(current, padded, config.blurStrength)
-                    if (processed != current && current != source) {
-                        current.recycle()
+                    // Throttle face detection to every ~150ms for 5x export acceleration
+                    val faces = if (timeMs - lastFaceDetectTimeMs >= 150L || cachedFaceRects.isEmpty()) {
+                        val detected = FaceBlurDetector.detectFaces(current)
+                        if (detected.isNotEmpty() || cachedFaceRects.isEmpty()) {
+                            cachedFaceRects = detected
+                            lastFaceDetectTimeMs = timeMs
+                        }
+                        cachedFaceRects
+                    } else {
+                        cachedFaceRects
                     }
-                    current = processed
+
+                    for (faceRect in faces) {
+                        val padded = PlateMaskInsets.paddingForCover(faceRect)
+                        val processed = PlateBitmapBlur.blurPlateRegion(current, padded, config.blurStrength)
+                        if (processed != current && current != source) {
+                            current.recycle()
+                        }
+                        current = processed
+                    }
                 }
             }
             BlurMode.Object -> {
@@ -156,31 +170,21 @@ object FrameEffectProcessor {
     }
 
     fun blurBitmap(source: Bitmap, blurStrength: Float): Bitmap {
-        return fastBlur(source, blurStrength)
+        return FastStackBlur.blur(source, blurStrength)
     }
 
     fun fastBlur(source: Bitmap, blurStrength: Float): Bitmap {
-        val factor = max(6, (blurStrength * 48).roundToInt())
-        val smallW = max(3, source.width / factor)
-        val smallH = max(3, source.height / factor)
-        val small = Bitmap.createScaledBitmap(source, smallW, smallH, true)
-        val result = Bitmap.createScaledBitmap(small, source.width, source.height, true)
-        small.recycle()
-        return result
+        return FastStackBlur.blur(source, blurStrength)
     }
 
     fun fastBlur(source: Bitmap, scale: Int, passes: Int): Bitmap {
-        val factor = scale.coerceIn(4, 32)
-        val smallW = max(2, source.width / factor)
-        val smallH = max(2, source.height / factor)
-        val small = Bitmap.createScaledBitmap(source, smallW, smallH, true)
-        val result = Bitmap.createScaledBitmap(small, source.width, source.height, true)
-        small.recycle()
-        return result
+        val rad = (scale * passes).coerceIn(2, 80)
+        val copy = source.copy(Bitmap.Config.ARGB_8888, true)
+        return FastStackBlur.stackBlurInPlace(copy, rad)
     }
 
     private fun applyBokehBackgroundBlur(source: Bitmap, strength: Float): Bitmap {
-        val blurred = fastBlur(source, strength)
+        val blurred = FastStackBlur.blur(source, strength)
         val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
 

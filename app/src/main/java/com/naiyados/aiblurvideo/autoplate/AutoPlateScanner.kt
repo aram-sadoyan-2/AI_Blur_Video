@@ -5,6 +5,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
 import com.naiyados.aiblurvideo.autoplate.detection.PlateDetectorPipeline
+import com.naiyados.aiblurvideo.autoplate.face.FaceBlurDetector
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -17,6 +18,8 @@ class AutoPlateScanner(
 
     suspend fun scan(
         videoUri: Uri,
+        detectPlates: Boolean = true,
+        detectFaces: Boolean = true,
         onProgress: suspend (framesScanned: Int, totalFrames: Int, detectionsFound: Int, progress: Float) -> Unit
     ): AutoPlateScanResult = withContext(Dispatchers.IO) {
         val pipeline = PlateDetectorPipeline(context)
@@ -46,7 +49,7 @@ class AutoPlateScanner(
 
             Log.d(
                 "AutoPlate",
-                "Scan start detector=${if (pipeline.isUsingMlDetector) "TFLite+track" else "OCR-fallback"} durationMs=$durationMs estFrames=$estimatedTotalFrames"
+                "Scan start detector=${if (pipeline.isUsingMlDetector) "TFLite+track" else "OCR-fallback"} durationMs=$durationMs estFrames=$estimatedTotalFrames detectPlates=$detectPlates detectFaces=$detectFaces"
             )
 
             withContext(Dispatchers.Main) {
@@ -62,29 +65,50 @@ class AutoPlateScanner(
                 )
 
                 if (bitmap != null) {
-                    val boxes = pipeline.detectFrame(
-                        bitmap = bitmap,
-                        timeMs = timeMs
-                    )
+                    var frameDetectionsCount = 0
 
-                    allBoxes += boxes
-
-                    boxes.forEach { box ->
-                        Log.d(
-                            "AutoPlate",
-                            "time=${box.timeMs} conf=${box.confidence} rect=${box.rect}"
+                    if (detectPlates) {
+                        val plateBoxes = pipeline.detectFrame(
+                            bitmap = bitmap,
+                            timeMs = timeMs
                         )
+                        allBoxes += plateBoxes
+                        frameDetectionsCount += plateBoxes.size
+
+                        plateBoxes.forEach { box ->
+                            Log.d(
+                                "AutoPlate",
+                                "PLATE time=${box.timeMs} conf=${box.confidence} rect=${box.rect}"
+                            )
+                        }
                     }
 
-                    if (timeMs == 0L && boxes.isNotEmpty()) {
+                    if (detectFaces) {
+                        val faceBoxes = FaceBlurDetector.detectFaceBoxes(
+                            bitmap = bitmap,
+                            timeMs = timeMs
+                        )
+                        allBoxes += faceBoxes
+                        frameDetectionsCount += faceBoxes.size
+
+                        faceBoxes.forEach { box ->
+                            Log.d(
+                                "AutoPlate",
+                                "FACE time=${box.timeMs} conf=${box.confidence} rect=${box.rect}"
+                            )
+                        }
+                    }
+
+                    if (timeMs == 0L && frameDetectionsCount > 0) {
                         hasFrameZeroDetection = true
                     }
 
-                    detectStreak = if (boxes.isNotEmpty()) detectStreak + 1 else 0
+                    detectStreak = if (frameDetectionsCount > 0) detectStreak + 1 else 0
                     bitmap.recycle()
 
                     if (
                         !pipeline.isUsingMlDetector &&
+                        !detectFaces &&
                         detectStreak >= 10 &&
                         hasFrameZeroDetection
                     ) {

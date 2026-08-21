@@ -15,16 +15,22 @@ class AutoPlateTimeline(
     private val maskMode: MaskMode
     private val constantMask: AutoPlateBox?
     private val keyframeTrack: List<AutoPlateBox>
+    private val faceTrack: List<AutoPlateBox>
 
     init {
-        val rawTrack = buildStableTrack(boxes)
+        val plateBoxes = boxes.filter { it.targetType == DetectionTarget.PLATE }
+        val faceBoxes = boxes.filter { it.targetType == DetectionTarget.FACE }
+
+        faceTrack = faceBoxes.sortedBy { it.timeMs }
+
+        val rawTrack = buildStableTrack(plateBoxes)
         dominantText = PlateScoring.dominantText(rawTrack)
 
-        val detectorTrack = isDetectorPlaceholderTrack(boxes)
+        val detectorTrack = isDetectorPlaceholderTrack(plateBoxes)
         val plateTrack = if (detectorTrack) {
-            boxes.sortedBy { it.timeMs }
+            plateBoxes.sortedBy { it.timeMs }
         } else {
-            buildPlateTrackForPlayback(boxes, rawTrack)
+            buildPlateTrackForPlayback(plateBoxes, rawTrack)
         }
         val spread = computePositionSpread(plateTrack)
         val textConsistency = PlateScoring.textConsistencyRatio(plateTrack)
@@ -56,16 +62,16 @@ class AutoPlateTimeline(
             emptyList()
         }
 
-        confidence = when (maskMode) {
-            MaskMode.Constant -> PlateTrackConfidence.High
-            MaskMode.Keyframes -> PlateTrackConfidence.Medium
-            MaskMode.None -> PlateTrackConfidence.Low
+        confidence = when {
+            maskMode == MaskMode.Constant -> PlateTrackConfidence.High
+            maskMode == MaskMode.Keyframes || faceTrack.isNotEmpty() -> PlateTrackConfidence.Medium
+            else -> PlateTrackConfidence.Low
         }
 
         Log.d(
             "AutoPlate",
             "Timeline mode=$maskMode confidence=$confidence dominant=$dominantText " +
-                "trackSize=${plateTrack.size} textConsistency=$textConsistency spread=$spread"
+                "trackSize=${plateTrack.size} faces=${faceTrack.size} textConsistency=$textConsistency spread=$spread"
         )
     }
 
@@ -312,7 +318,7 @@ class AutoPlateTimeline(
         )
     }
 
-    fun boxesAt(currentTimeMs: Long): List<AutoPlateBox> {
+    fun plateBoxesAt(currentTimeMs: Long): List<AutoPlateBox> {
         constantMask?.let { mask ->
             if (currentTimeMs < 0L) return emptyList()
             return listOf(mask.copy(timeMs = currentTimeMs))
@@ -366,6 +372,44 @@ class AutoPlateTimeline(
                 rect = rect
             )
         )
+    }
+
+    fun faceBoxesAt(currentTimeMs: Long): List<AutoPlateBox> {
+        if (faceTrack.isEmpty()) return emptyList()
+
+        // Match faces within a sliding time window (±180ms)
+        val windowMs = 180L
+        val nearby = faceTrack.filter { abs(it.timeMs - currentTimeMs) <= windowMs }
+        if (nearby.isNotEmpty()) {
+            return nearby.map { it.copy(timeMs = currentTimeMs) }
+        }
+
+        // If not in tight window, find closest detected frame if within 350ms
+        val closest = faceTrack.minByOrNull { abs(it.timeMs - currentTimeMs) }
+        if (closest != null && abs(closest.timeMs - currentTimeMs) <= 350L) {
+            return listOf(closest.copy(timeMs = currentTimeMs))
+        }
+
+        return emptyList()
+    }
+
+    fun boxesAt(
+        currentTimeMs: Long,
+        includePlates: Boolean = true,
+        includeFaces: Boolean = true
+    ): List<AutoPlateBox> {
+        val result = mutableListOf<AutoPlateBox>()
+        if (includePlates) {
+            result += plateBoxesAt(currentTimeMs)
+        }
+        if (includeFaces) {
+            result += faceBoxesAt(currentTimeMs)
+        }
+        return result
+    }
+
+    fun boxesAt(currentTimeMs: Long): List<AutoPlateBox> {
+        return boxesAt(currentTimeMs, includePlates = true, includeFaces = true)
     }
 
     private enum class MaskMode {

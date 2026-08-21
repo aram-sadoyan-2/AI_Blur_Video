@@ -8,30 +8,26 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.core.view.WindowCompat
 import com.naiyados.aiblurvideo.ui.screens.BatchQueueScreen
 import com.naiyados.aiblurvideo.ui.screens.BlurMode
 import com.naiyados.aiblurvideo.ui.screens.HomeScreen
+import com.naiyados.aiblurvideo.ui.theme.AIBlurVideoTheme
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.ThemeManager
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        ThemeManager.init(this)
         enableEdgeToEdge()
 
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
-
         setContent {
-            MaterialTheme {
+            AIBlurVideoTheme {
                 Surface(
                     color = AiBlurColors.Background
                 ) {

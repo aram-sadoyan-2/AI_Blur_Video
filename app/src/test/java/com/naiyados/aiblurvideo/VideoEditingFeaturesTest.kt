@@ -7,6 +7,8 @@ import com.naiyados.aiblurvideo.ui.model.BlurMode
 import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
 import com.naiyados.aiblurvideo.ui.model.VideoEditConfig
 import com.naiyados.aiblurvideo.ui.model.VideoFilter
+import com.naiyados.aiblurvideo.ui.theme.AppThemeMode
+import com.naiyados.aiblurvideo.ui.theme.ThemeManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -88,10 +90,24 @@ class VideoEditingFeaturesTest {
         val config = VideoEditConfig()
         assertEquals(BlurMode.AutoPlate, config.blurMode)
         assertEquals(0.65f, config.blurStrength, 0.001f)
+        assertEquals(true, config.isPlateBlurActive)
+        assertEquals(true, config.isFaceBlurActive)
         assertEquals(VideoFilter.NONE, config.filter)
         assertEquals(1.0f, config.playbackSpeed, 0.001f)
         assertEquals(VideoAspectRatio.ORIGINAL, config.aspectRatio)
         assertNotNull(config.exportSettings)
+    }
+
+    @Test
+    fun testThemeManagerToggleLogic() {
+        ThemeManager.setThemeMode(com.naiyados.aiblurvideo.ui.theme.AppThemeMode.DARK)
+        assertEquals(com.naiyados.aiblurvideo.ui.theme.AppThemeMode.DARK, ThemeManager.themeMode.value)
+
+        ThemeManager.toggleDarkMode(isCurrentlyDark = true)
+        assertEquals(com.naiyados.aiblurvideo.ui.theme.AppThemeMode.LIGHT, ThemeManager.themeMode.value)
+
+        ThemeManager.toggleDarkMode(isCurrentlyDark = false)
+        assertEquals(com.naiyados.aiblurvideo.ui.theme.AppThemeMode.DARK, ThemeManager.themeMode.value)
     }
 }
 

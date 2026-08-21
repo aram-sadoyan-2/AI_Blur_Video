@@ -95,6 +95,7 @@ import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
 import com.naiyados.aiblurvideo.autoplate.AutoPlateStatsOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
+import com.naiyados.aiblurvideo.autoplate.DetectionTarget
 import com.naiyados.aiblurvideo.autoplate.PlateInferenceStats
 import com.naiyados.aiblurvideo.autoplate.PlateTrackConfidence
 import com.naiyados.aiblurvideo.autoplate.export.AutoPlateVideoExporter
@@ -117,6 +118,8 @@ import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
 import com.naiyados.aiblurvideo.ui.model.VideoEditConfig
 import com.naiyados.aiblurvideo.ui.model.VideoFilter
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
+import com.naiyados.aiblurvideo.ui.theme.ThemeManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -133,6 +136,7 @@ fun BlurMode(
     onSaveClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val appColors = LocalAppColors.current
     val scope = rememberCoroutineScope()
 
     var selectedMode by remember {
@@ -209,6 +213,10 @@ fun BlurMode(
     }
 
     var isPlateBlurEnabled by remember {
+        mutableStateOf(true)
+    }
+
+    var isFaceBlurEnabled by remember {
         mutableStateOf(true)
     }
 
@@ -289,6 +297,7 @@ fun BlurMode(
             blurMode = selectedMode,
             blurStrength = blurStrength,
             isPlateBlurActive = isPlateBlurEnabled,
+            isFaceBlurActive = isFaceBlurEnabled,
             filter = selectedFilter,
             filterIntensity = filterIntensity,
             pixelateBlockSize = pixelateBlockSize,
@@ -302,10 +311,22 @@ fun BlurMode(
         )
     }
 
+    fun saveSnapshotForUndo() {
+        val current = captureConfigSnapshot()
+        if (undoStack.isEmpty() || undoStack.last() != current) {
+            undoStack.add(current)
+            redoStack.clear()
+            if (undoStack.size > 30) {
+                undoStack.removeAt(0)
+            }
+        }
+    }
+
     fun applyConfig(config: VideoEditConfig) {
         selectedMode = config.blurMode
         blurStrength = config.blurStrength
         isPlateBlurEnabled = config.isPlateBlurActive
+        isFaceBlurEnabled = config.isFaceBlurActive
         selectedFilter = config.filter
         filterIntensity = config.filterIntensity
         pixelateBlockSize = config.pixelateBlockSize
@@ -332,11 +353,15 @@ fun BlurMode(
                 redoStack.add(current)
                 selectedMode = BlurMode.AutoPlate
                 blurStrength = 0.65f
+                isPlateBlurEnabled = true
+                isFaceBlurEnabled = true
                 selectedFilter = VideoFilter.NONE
                 playbackSpeed = 1.0f
                 selectedAspectRatio = VideoAspectRatio.ORIGINAL
                 customObjectRect = RectF(0.25f, 0.30f, 0.75f, 0.70f)
                 Toast.makeText(context, "↩ Reset edits", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "No edits to undo", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -348,6 +373,8 @@ fun BlurMode(
             undoStack.add(current)
             applyConfig(next)
             Toast.makeText(context, "↪ Redone", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "No edits to redo", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -362,15 +389,19 @@ fun BlurMode(
         )
     }
 
-    val currentAutoPlateBoxes = if (selectedMode == BlurMode.AutoPlate) {
-        timeline.boxesAt(currentPositionMs)
+    val currentAutoPlateBoxes = if (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face) {
+        timeline.boxesAt(
+            currentTimeMs = currentPositionMs,
+            includePlates = isPlateBlurEnabled && selectedMode == BlurMode.AutoPlate,
+            includeFaces = isFaceBlurEnabled
+        )
     } else {
         emptyList()
     }
 
     val displayAutoPlateBoxes = if (currentAutoPlateBoxes.isNotEmpty()) {
         currentAutoPlateBoxes
-    } else if (livePlateBox != null && selectedMode == BlurMode.AutoPlate) {
+    } else if (livePlateBox != null && (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face)) {
         listOf(livePlateBox!!)
     } else {
         emptyList()
@@ -499,6 +530,7 @@ fun BlurMode(
                         blurMode = selectedMode,
                         blurStrength = blurStrength,
                         isPlateBlurActive = isPlateBlurEnabled,
+                        isFaceBlurActive = isFaceBlurEnabled,
                         filter = selectedFilter,
                         filterIntensity = filterIntensity,
                         pixelateBlockSize = pixelateBlockSize,
@@ -515,7 +547,7 @@ fun BlurMode(
                     val result = exporter.exportWithConfig(
                         inputUri = videoUri,
                         config = editConfig,
-                        timeline = if (selectedMode == BlurMode.AutoPlate) timeline else null,
+                        timeline = if (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face) timeline else null,
                         durationMs = duration,
                         onProgress = { exportProgress = it }
                     )
@@ -565,6 +597,9 @@ fun BlurMode(
             onSettingsClick = {
                 showExportSettingsDialog = true
             },
+            onThemeToggleClick = {
+                ThemeManager.toggleDarkMode(appColors.isDark)
+            },
             onSaveClick = {
                 if (isExporting || videoUri == null) return@EditorHeaderBar
                 isPlaying = false
@@ -573,7 +608,7 @@ fun BlurMode(
             }
         )
 
-        // License Plate Scanning Progress Bar Banner
+        // License Plate / Face Scanning Progress Bar Banner
         DetectionProgressCard(
             isScanning = isAutoPlateScanning,
             progress = autoPlateScanProgress,
@@ -584,7 +619,7 @@ fun BlurMode(
                 scanJob?.cancel()
                 scanJob = null
                 isAutoPlateScanning = false
-                Toast.makeText(context, "Plate scan cancelled", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Scan cancelled", Toast.LENGTH_SHORT).show()
             }
         )
 
@@ -616,19 +651,21 @@ fun BlurMode(
                 }
             )
 
-            // Auto Plate Overlay
-            if (selectedMode == BlurMode.AutoPlate && (displayAutoPlateBoxes.isNotEmpty() || !isPlateBlurEnabled)) {
+            // Auto Plate & Face Blur Overlay
+            if ((selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face) && (displayAutoPlateBoxes.isNotEmpty() || !isPlateBlurEnabled || !isFaceBlurEnabled)) {
                 AutoPlateOverlay(
                     modifier = Modifier.fillMaxSize(),
                     boxes = displayAutoPlateBoxes,
-                    isBlurEnabled = isPlateBlurEnabled,
+                    isBlurEnabled = (selectedMode == BlurMode.AutoPlate && isPlateBlurEnabled) || isFaceBlurEnabled,
+                    isPlateBlurEnabled = isPlateBlurEnabled,
+                    isFaceBlurEnabled = isFaceBlurEnabled,
                     showDebugBoundingBoxes = showDebugBoundingBoxes,
                     blurStrength = blurStrength
                 )
             }
 
-            // Auto Plate Real-time HUD Controls
-            if (selectedMode == BlurMode.AutoPlate) {
+            // Auto Plate & Face Real-time HUD Controls
+            if (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face) {
                 AutoPlateStatsOverlay(
                     stats = currentDisplayStats,
                     isVisible = showInferenceStats,
@@ -644,16 +681,67 @@ fun BlurMode(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Blur Toggle Pill
+                    if (selectedMode == BlurMode.AutoPlate) {
+                        // Plate Blur Toggle Pill
+                        Surface(
+                            modifier = Modifier
+                                .testTag("plate_blur_toggle_container")
+                                .clickable {
+                                    saveSnapshotForUndo()
+                                    isPlateBlurEnabled = !isPlateBlurEnabled
+                                },
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.Black.copy(alpha = 0.70f),
+                            border = BorderStroke(
+                                width = 0.8.dp,
+                                color = if (isPlateBlurEnabled) AiBlurColors.Pink else Color.White.copy(alpha = 0.2f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DirectionsCar,
+                                    contentDescription = null,
+                                    tint = if (isPlateBlurEnabled) AiBlurColors.Pink else Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = if (isPlateBlurEnabled) "Plate" else "Off",
+                                    color = if (isPlateBlurEnabled) Color.White else Color.White.copy(alpha = 0.7f),
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Switch(
+                                    checked = isPlateBlurEnabled,
+                                    onCheckedChange = {
+                                        saveSnapshotForUndo()
+                                        isPlateBlurEnabled = it
+                                    },
+                                    modifier = Modifier
+                                        .size(0.dp)
+                                        .alpha(0f)
+                                        .testTag("toggle_plate_blur_switch")
+                                )
+                            }
+                        }
+                    }
+
+                    // Face Blur Toggle Pill
                     Surface(
                         modifier = Modifier
-                            .testTag("plate_blur_toggle_container")
-                            .clickable { isPlateBlurEnabled = !isPlateBlurEnabled },
+                            .testTag("face_blur_toggle_container")
+                            .clickable {
+                                saveSnapshotForUndo()
+                                isFaceBlurEnabled = !isFaceBlurEnabled
+                            },
                         shape = RoundedCornerShape(14.dp),
                         color = Color.Black.copy(alpha = 0.70f),
                         border = BorderStroke(
                             width = 0.8.dp,
-                            color = if (isPlateBlurEnabled) AiBlurColors.Pink else Color.White.copy(alpha = 0.2f)
+                            color = if (isFaceBlurEnabled) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.2f)
                         )
                     ) {
                         Row(
@@ -662,24 +750,27 @@ fun BlurMode(
                             horizontalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
                             Icon(
-                                imageVector = if (isPlateBlurEnabled) Icons.Rounded.BlurOn else Icons.Rounded.BlurOff,
+                                imageVector = Icons.Rounded.Face,
                                 contentDescription = null,
-                                tint = if (isPlateBlurEnabled) AiBlurColors.Pink else Color.White.copy(alpha = 0.5f),
+                                tint = if (isFaceBlurEnabled) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.5f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = if (isPlateBlurEnabled) "Blur" else "Off",
-                                color = if (isPlateBlurEnabled) Color.White else Color.White.copy(alpha = 0.7f),
+                                text = if (isFaceBlurEnabled) "Face" else "Off",
+                                color = if (isFaceBlurEnabled) Color.White else Color.White.copy(alpha = 0.7f),
                                 fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Switch(
-                                checked = isPlateBlurEnabled,
-                                onCheckedChange = { isPlateBlurEnabled = it },
+                                checked = isFaceBlurEnabled,
+                                onCheckedChange = {
+                                    saveSnapshotForUndo()
+                                    isFaceBlurEnabled = it
+                                },
                                 modifier = Modifier
                                     .size(0.dp)
                                     .alpha(0f)
-                                    .testTag("toggle_plate_blur_switch")
+                                    .testTag("toggle_face_blur_switch")
                             )
                         }
                     }
@@ -830,9 +921,11 @@ fun BlurMode(
                             BlurStrengthSlider(
                                 modifier = Modifier.fillMaxWidth(),
                                 value = blurStrength,
-                                label = "Plate Blur",
+                                label = "Blur Intensity",
                                 testTag = "plate_blur_strength_slider",
-                                onValueChange = { blurStrength = it }
+                                onValueChange = {
+                                    blurStrength = it
+                                }
                             )
 
                             // Hidden switches with test tags for automated testing compatibility
@@ -843,6 +936,11 @@ fun BlurMode(
                                     checked = isPlateBlurEnabled,
                                     onCheckedChange = { isPlateBlurEnabled = it },
                                     modifier = Modifier.testTag("plate_blur_bottom_switch")
+                                )
+                                Switch(
+                                    checked = isFaceBlurEnabled,
+                                    onCheckedChange = { isFaceBlurEnabled = it },
+                                    modifier = Modifier.testTag("face_blur_bottom_switch")
                                 )
                                 Switch(
                                     checked = showInferenceStats,
@@ -874,13 +972,18 @@ fun BlurMode(
                     }
 
                     BlurMode.Face -> {
-                        BlurStrengthSlider(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                            value = blurStrength,
-                            label = "Face Blur",
-                            testTag = "face_blur_strength_slider",
-                            onValueChange = { blurStrength = it }
-                        )
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            BlurStrengthSlider(
+                                modifier = Modifier.fillMaxWidth(),
+                                value = blurStrength,
+                                label = "Face Blur Strength",
+                                testTag = "face_blur_strength_slider",
+                                onValueChange = { blurStrength = it }
+                            )
+                        }
                     }
 
                     BlurMode.Object -> {
@@ -940,7 +1043,10 @@ fun BlurMode(
                         FilterSelectorBar(
                             selectedFilter = selectedFilter,
                             filterIntensity = filterIntensity,
-                            onFilterSelected = { selectedFilter = it },
+                            onFilterSelected = {
+                                saveSnapshotForUndo()
+                                selectedFilter = it
+                            },
                             onIntensityChange = { filterIntensity = it },
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
                         )
@@ -949,7 +1055,10 @@ fun BlurMode(
                     BlurMode.Speed -> {
                         SpeedSelectorBar(
                             currentSpeed = playbackSpeed,
-                            onSpeedSelected = { playbackSpeed = it },
+                            onSpeedSelected = {
+                                saveSnapshotForUndo()
+                                playbackSpeed = it
+                            },
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
                         )
                     }
@@ -972,7 +1081,10 @@ fun BlurMode(
 
                             AspectRatioSelectorBar(
                                 selectedRatio = selectedAspectRatio,
-                                onRatioSelected = { selectedAspectRatio = it }
+                                onRatioSelected = {
+                                    saveSnapshotForUndo()
+                                    selectedAspectRatio = it
+                                }
                             )
                         }
                     }
@@ -991,6 +1103,7 @@ fun BlurMode(
                         icon = Icons.Rounded.DirectionsCar,
                         selected = selectedMode == BlurMode.AutoPlate,
                         onClick = {
+                            saveSnapshotForUndo()
                             selectedMode = BlurMode.AutoPlate
                             if (videoUri != null && !isAutoPlateScanning) {
                                 scanJob = scope.launch {
@@ -1007,6 +1120,8 @@ fun BlurMode(
                                         val scanner = AutoPlateScanner(context)
                                         val scanResult = scanner.scan(
                                             videoUri = videoUri,
+                                            detectPlates = true,
+                                            detectFaces = true,
                                             onProgress = { frames, totalFrames, found, progress ->
                                                 autoPlateScanFrames = frames
                                                 autoPlateTotalScanFrames = totalFrames
@@ -1035,56 +1150,116 @@ fun BlurMode(
                         title = "Full Blur",
                         icon = Icons.Rounded.BlurOn,
                         selected = selectedMode == BlurMode.FullBlur,
-                        onClick = { selectedMode = BlurMode.FullBlur }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.FullBlur
+                        }
                     )
 
                     EditorActionTool(
                         title = "Face Blur",
                         icon = Icons.Rounded.Face,
                         selected = selectedMode == BlurMode.Face,
-                        onClick = { selectedMode = BlurMode.Face }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.Face
+                            isFaceBlurEnabled = true
+                            if (videoUri != null && !isAutoPlateScanning && autoPlateBoxes.none { it.targetType == DetectionTarget.FACE }) {
+                                scanJob = scope.launch {
+                                    isAutoPlateScanning = true
+                                    autoPlateScanFrames = 0
+                                    autoPlateTotalScanFrames = 0
+                                    autoPlateScanProgress = 0f
+                                    autoPlateFoundCount = 0
+
+                                    try {
+                                        val scanner = AutoPlateScanner(context)
+                                        val scanResult = scanner.scan(
+                                            videoUri = videoUri,
+                                            detectPlates = false,
+                                            detectFaces = true,
+                                            onProgress = { frames, totalFrames, found, progress ->
+                                                autoPlateScanFrames = frames
+                                                autoPlateTotalScanFrames = totalFrames
+                                                autoPlateFoundCount = found
+                                                autoPlateScanProgress = progress
+                                            }
+                                        )
+                                        autoPlateBoxes = scanResult.boxes
+                                        autoPlateVideoDurationMs = scanResult.durationMs
+                                        autoPlateConfidence = scanResult.confidence
+                                        autoPlateDominantText = scanResult.dominantText
+                                        autoPlateFoundCount = scanResult.boxes.size
+                                        autoPlateScanProgress = 1.0f
+                                    } catch (ce: CancellationException) {
+                                        Log.d("AutoPlate", "Face scan cancelled")
+                                    } finally {
+                                        isAutoPlateScanning = false
+                                        scanJob = null
+                                    }
+                                }
+                            }
+                        }
                     )
 
                     EditorActionTool(
                         title = "Custom Box",
                         icon = Icons.Rounded.Interests,
                         selected = selectedMode == BlurMode.Object,
-                        onClick = { selectedMode = BlurMode.Object }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.Object
+                        }
                     )
 
                     EditorActionTool(
                         title = "Remove BG",
                         icon = Icons.Rounded.Person,
                         selected = selectedMode == BlurMode.Background,
-                        onClick = { selectedMode = BlurMode.Background }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.Background
+                        }
                     )
 
                     EditorActionTool(
                         title = "Pixelate",
                         icon = Icons.Rounded.GridView,
                         selected = selectedMode == BlurMode.Pixelate,
-                        onClick = { selectedMode = BlurMode.Pixelate }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.Pixelate
+                        }
                     )
 
                     EditorActionTool(
                         title = "Effects",
                         icon = Icons.Rounded.Palette,
                         selected = selectedMode == BlurMode.Effects,
-                        onClick = { selectedMode = BlurMode.Effects }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.Effects
+                        }
                     )
 
                     EditorActionTool(
                         title = "Speed",
                         icon = Icons.Rounded.Speed,
                         selected = selectedMode == BlurMode.Speed,
-                        onClick = { selectedMode = BlurMode.Speed }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.Speed
+                        }
                     )
 
                     EditorActionTool(
                         title = "Crop",
                         icon = Icons.Rounded.ContentCut,
                         selected = selectedMode == BlurMode.Crop,
-                        onClick = { selectedMode = BlurMode.Crop }
+                        onClick = {
+                            saveSnapshotForUndo()
+                            selectedMode = BlurMode.Crop
+                        }
                     )
                 }
             }

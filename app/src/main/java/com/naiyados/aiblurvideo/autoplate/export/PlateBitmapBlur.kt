@@ -22,32 +22,8 @@ object PlateBitmapBlur {
         plateRect: RectF,
         strength: Float = 0.65f
     ): Bitmap {
-        val output = if (source.isMutable) source else source.copy(Bitmap.Config.ARGB_8888, true)
         val cover = PlateMaskInsets.paddingForCover(plateRect)
-        val left = cover.left.roundToInt().coerceIn(0, output.width - 1)
-        val top = cover.top.roundToInt().coerceIn(0, output.height - 1)
-        val right = cover.right.roundToInt().coerceIn(left + 1, output.width)
-        val bottom = cover.bottom.roundToInt().coerceIn(top + 1, output.height)
-
-        val regionWidth = right - left
-        val regionHeight = bottom - top
-        if (regionWidth < 4 || regionHeight < 4) {
-            return output
-        }
-
-        val crop = Bitmap.createBitmap(output, left, top, regionWidth, regionHeight)
-        val scale = max(4, (14 * (1.1f - strength)).roundToInt())
-        val smallW = max(2, regionWidth / scale)
-        val smallH = max(2, regionHeight / scale)
-        val small = Bitmap.createScaledBitmap(crop, smallW, smallH, true)
-        val blurred = Bitmap.createScaledBitmap(small, regionWidth, regionHeight, true)
-        small.recycle()
-        crop.recycle()
-
-        val canvas = Canvas(output)
-        canvas.drawBitmap(blurred, left.toFloat(), top.toFloat(), Paint(Paint.FILTER_BITMAP_FLAG))
-        blurred.recycle()
-        return output
+        return FastStackBlur.blurRegion(source, cover, strength)
     }
 
     /** Opaque black on top of blur so the plate is definitely hidden in export. */

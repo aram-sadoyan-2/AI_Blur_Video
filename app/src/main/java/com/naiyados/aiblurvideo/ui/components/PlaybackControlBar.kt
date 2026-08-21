@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.automirrored.rounded.Undo
-import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VolumeOff
@@ -26,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,13 +76,15 @@ fun PlaybackControlBar(
         // Center Play / Pause button
         IconButton(
             onClick = onPlayPauseClick,
-            modifier = Modifier.size(40.dp)
+            modifier = Modifier
+                .size(48.dp)
+                .testTag("play_pause_button")
         ) {
             Icon(
                 imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = if (isPlaying) "Pause" else "Play",
                 tint = Color.White,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(28.dp)
             )
         }
 
@@ -91,43 +93,50 @@ fun PlaybackControlBar(
         // Right quick actions (Undo, Redo, Mute)
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            // 1. Undo button (left of Redo & Sound icon)
             IconButton(
                 onClick = onUndoClick,
-                enabled = canUndo,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("undo_button")
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Undo,
                     contentDescription = "Undo",
-                    tint = if (canUndo) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(19.dp)
+                    tint = if (canUndo) Color.White else Color.White.copy(alpha = 0.35f),
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
+            // 2. Redo button (left of Sound icon)
             IconButton(
                 onClick = onRedoClick,
-                enabled = canRedo,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("redo_button")
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Redo,
                     contentDescription = "Redo",
-                    tint = if (canRedo) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(19.dp)
+                    tint = if (canRedo) Color.White else Color.White.copy(alpha = 0.35f),
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
+            // 3. Sound icon button (Mute / Unmute)
             IconButton(
                 onClick = onToggleMute,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("toggle_mute_button")
             ) {
                 Icon(
                     imageVector = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
                     contentDescription = if (isMuted) "Unmute" else "Mute",
-                    tint = if (isMuted) Color(0xFFFF5252) else Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.size(19.dp)
+                    tint = if (isMuted) Color(0xFFFF5252) else Color.White,
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }

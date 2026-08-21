@@ -26,9 +26,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.SettingsBrightness
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,6 +39,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,12 +47,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,7 +66,11 @@ import com.naiyados.aiblurvideo.queue.QueueItemStatus
 import com.naiyados.aiblurvideo.ui.components.GlassCard
 import com.naiyados.aiblurvideo.ui.components.HistorySection
 import com.naiyados.aiblurvideo.ui.components.PremiumBadge
+import com.naiyados.aiblurvideo.ui.components.ThemeSelectionDialog
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.AppThemeMode
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
+import com.naiyados.aiblurvideo.ui.theme.ThemeManager
 
 @Composable
 fun HomeScreen(
@@ -70,8 +82,11 @@ fun HomeScreen(
     onOpenProjectsClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val appColors = LocalAppColors.current
     val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    var showThemeDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         ProcessedVideoHistoryManager.init(context)
@@ -80,6 +95,12 @@ fun HomeScreen(
     val historyItems by ProcessedVideoHistoryManager.historyFlow.collectAsState()
     val queueItems by BatchQueueManager.queueItems.collectAsState()
     val isQueueProcessing by BatchQueueManager.isProcessing.collectAsState()
+
+    if (showThemeDialog) {
+        ThemeSelectionDialog(
+            onDismissRequest = { showThemeDialog = false }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -96,7 +117,8 @@ fun HomeScreen(
         item {
             HomeHeader(
                 isPremium = isPremium,
-                onPremiumClick = onPremiumClick
+                onPremiumClick = onPremiumClick,
+                onThemeClick = { showThemeDialog = true }
             )
         }
 
@@ -150,14 +172,16 @@ private fun BatchQueueHeroBanner(
     isProcessing: Boolean,
     onClick: () -> Unit
 ) {
+    val appColors = LocalAppColors.current
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
-        color = Color(0xFF1E1C2B),
+        color = if (appColors.isDark) Color(0xFF1E1C2B) else appColors.surface,
         border = BorderStroke(
             width = 1.dp,
-            color = if (isProcessing) AiBlurColors.Pink else Color.White.copy(alpha = 0.12f)
+            color = if (isProcessing) AiBlurColors.Pink else appColors.border
         ),
+        shadowElevation = if (appColors.isDark) 0.dp else 3.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -209,7 +233,7 @@ private fun BatchQueueHeroBanner(
                     ) {
                         Text(
                             text = "Batch Queue Processing",
-                            color = Color.White,
+                            color = appColors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
                         )
@@ -232,12 +256,12 @@ private fun BatchQueueHeroBanner(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(Color.White.copy(alpha = 0.15f))
+                                    .background(if (appColors.isDark) Color.White.copy(alpha = 0.15f) else appColors.surfaceVariant)
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = "$queueCount items",
-                                    color = Color.White,
+                                    color = if (appColors.isDark) Color.White else appColors.textPrimary,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -249,7 +273,7 @@ private fun BatchQueueHeroBanner(
                         text = if (isProcessing) "Currently processing multiple videos sequentially"
                         else if (queueCount > 0) "$queueCount videos ready to be processed sequentially"
                         else "Queue & process multiple videos automatically",
-                        color = Color.White.copy(alpha = 0.65f),
+                        color = appColors.textSecondary,
                         fontSize = 12.sp
                     )
                 }
@@ -258,22 +282,32 @@ private fun BatchQueueHeroBanner(
             Icon(
                 imageVector = Icons.Rounded.ArrowForward,
                 contentDescription = "Open Queue",
-                tint = Color.White.copy(alpha = 0.6f),
+                tint = appColors.textTertiary,
                 modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
-
 @Composable
 private fun HomeHeader(
     isPremium: Boolean,
-    onPremiumClick: () -> Unit
+    onPremiumClick: () -> Unit,
+    onThemeClick: () -> Unit
 ) {
+    val themeMode by ThemeManager.themeMode.collectAsState()
+    val appColors = LocalAppColors.current
+
+    val themeIcon = when (themeMode) {
+        AppThemeMode.DARK -> Icons.Rounded.DarkMode
+        AppThemeMode.LIGHT -> Icons.Rounded.LightMode
+        AppThemeMode.SYSTEM -> Icons.Rounded.SettingsBrightness
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column(
             modifier = Modifier.weight(1f)
@@ -292,10 +326,47 @@ private fun HomeHeader(
             )
         }
 
-        PremiumBadge(
-            isPremium = isPremium,
-            onClick = onPremiumClick
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Theme Toggle Button
+            Surface(
+                onClick = onThemeClick,
+                shape = RoundedCornerShape(16.dp),
+                color = if (appColors.isDark) Color.White.copy(alpha = 0.08f) else appColors.surfaceElevated,
+                border = BorderStroke(1.dp, appColors.border),
+                modifier = Modifier.testTag("theme_toggle_button")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = themeIcon,
+                        contentDescription = "Change Theme",
+                        tint = if (appColors.isDark) AiBlurColors.Purple else AiBlurColors.Orange,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Text(
+                        text = when (themeMode) {
+                            AppThemeMode.DARK -> "Dark"
+                            AppThemeMode.LIGHT -> "Light"
+                            AppThemeMode.SYSTEM -> "Auto"
+                        },
+                        color = appColors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            PremiumBadge(
+                isPremium = isPremium,
+                onClick = onPremiumClick
+            )
+        }
     }
 }
 
@@ -369,34 +440,36 @@ private fun FeatureSectionCompact() {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             CompactFeatureTile(
-                title = "Background blur",
-                subtitle = "Portrait video",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                title = "Auto License Plate",
+                subtitle = "Smart AI OCR detection"
             )
 
             CompactFeatureTile(
-                title = "Face blur",
-                subtitle = "Privacy tool",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                title = "Smart Face Blur",
+                subtitle = "Tracking & obscuring"
             )
         }
 
         Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             CompactFeatureTile(
-                title = "HD export",
-                subtitle = "Premium",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                title = "Custom Touch Box",
+                subtitle = "Any manual region"
             )
 
             CompactFeatureTile(
-                title = "No watermark",
-                subtitle = "Premium",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                title = "Color Filters & FX",
+                subtitle = "Cinematic tone grades"
             )
         }
     }
@@ -408,6 +481,7 @@ private fun CompactFeatureTile(
     subtitle: String,
     modifier: Modifier = Modifier
 ) {
+    val appColors = LocalAppColors.current
     Card(
         modifier = modifier.height(78.dp),
         shape = RoundedCornerShape(22.dp),
@@ -416,7 +490,10 @@ private fun CompactFeatureTile(
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = Color.White.copy(alpha = 0.08f)
+            color = appColors.border
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (appColors.isDark) 0.dp else 2.dp
         )
     ) {
         Column(
@@ -450,7 +527,8 @@ private fun ImportVideoBigButton(
     Button(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .testTag("choose_video_button"),
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
         colors = ButtonDefaults.buttonColors(
@@ -488,6 +566,7 @@ private fun ImportVideoBigButton(
 
 @Composable
 private fun SmallInstructionCard() {
+    val appColors = LocalAppColors.current
     GlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -498,20 +577,20 @@ private fun SmallInstructionCard() {
         ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color.White.copy(alpha = 0.10f)
+                color = if (appColors.isDark) Color.White.copy(alpha = 0.10f) else appColors.surfaceVariant
             ) {
                 Icon(
                     modifier = Modifier.padding(10.dp),
                     imageVector = Icons.Rounded.PlayCircle,
                     contentDescription = null,
-                    tint = Color.White
+                    tint = if (appColors.isDark) Color.White else appColors.textPrimary
                 )
             }
 
             Column {
                 Text(
                     text = "Start by choosing a video",
-                    color = Color.White,
+                    color = appColors.textPrimary,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 14.sp
                 )
@@ -529,13 +608,17 @@ private fun SmallInstructionCard() {
 
 @Composable
 private fun TipCard() {
+    val appColors = LocalAppColors.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.06f)
+            containerColor = if (appColors.isDark) Color.White.copy(alpha = 0.06f) else appColors.surface
         ),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
+        border = BorderStroke(1.dp, appColors.border),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (appColors.isDark) 0.dp else 1.dp
+        )
     ) {
         Text(
             modifier = Modifier.padding(16.dp),
