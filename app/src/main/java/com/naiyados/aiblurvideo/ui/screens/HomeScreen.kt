@@ -1,5 +1,6 @@
 package com.naiyados.aiblurvideo.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,29 +16,47 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.naiyados.aiblurvideo.history.ProcessedVideoHistoryManager
+import com.naiyados.aiblurvideo.queue.BatchQueueManager
+import com.naiyados.aiblurvideo.queue.QueueItemStatus
 import com.naiyados.aiblurvideo.ui.components.GlassCard
+import com.naiyados.aiblurvideo.ui.components.HistorySection
 import com.naiyados.aiblurvideo.ui.components.PremiumBadge
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 
@@ -44,11 +64,22 @@ import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 fun HomeScreen(
     isPremium: Boolean,
     onImportVideoClick: () -> Unit,
+    onOpenBatchQueue: () -> Unit = {},
+    onOpenVideo: (Uri) -> Unit = {},
     onPremiumClick: () -> Unit,
-    onOpenProjectsClick: () -> Unit
+    onOpenProjectsClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    LaunchedEffect(Unit) {
+        ProcessedVideoHistoryManager.init(context)
+    }
+
+    val historyItems by ProcessedVideoHistoryManager.historyFlow.collectAsState()
+    val queueItems by BatchQueueManager.queueItems.collectAsState()
+    val isQueueProcessing by BatchQueueManager.isProcessing.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -66,6 +97,26 @@ fun HomeScreen(
             HomeHeader(
                 isPremium = isPremium,
                 onPremiumClick = onPremiumClick
+            )
+        }
+
+        if (historyItems.isNotEmpty()) {
+            item {
+                HistorySection(
+                    items = historyItems,
+                    onOpenVideo = onOpenVideo,
+                    onDeleteVideo = { id ->
+                        ProcessedVideoHistoryManager.removeVideo(context, id)
+                    }
+                )
+            }
+        }
+
+        item {
+            BatchQueueHeroBanner(
+                queueCount = queueItems.size,
+                isProcessing = isQueueProcessing,
+                onClick = onOpenBatchQueue
             )
         }
 
@@ -92,6 +143,128 @@ fun HomeScreen(
         }
     }
 }
+
+@Composable
+private fun BatchQueueHeroBanner(
+    queueCount: Int,
+    isProcessing: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(22.dp),
+        color = Color(0xFF1E1C2B),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isProcessing) AiBlurColors.Pink else Color.White.copy(alpha = 0.12f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    AiBlurColors.Pink.copy(alpha = 0.3f),
+                                    AiBlurColors.Purple.copy(alpha = 0.3f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isProcessing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = AiBlurColors.Pink,
+                            strokeWidth = 2.5.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.VideoLibrary,
+                            contentDescription = null,
+                            tint = AiBlurColors.Pink,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Batch Queue Processing",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+
+                        if (isProcessing) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(AiBlurColors.Pink)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Processing",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else if (queueCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.White.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "$queueCount items",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = if (isProcessing) "Currently processing multiple videos sequentially"
+                        else if (queueCount > 0) "$queueCount videos ready to be processed sequentially"
+                        else "Queue & process multiple videos automatically",
+                        color = Color.White.copy(alpha = 0.65f),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = Icons.Rounded.ArrowForward,
+                contentDescription = "Open Queue",
+                tint = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
 
 @Composable
 private fun HomeHeader(

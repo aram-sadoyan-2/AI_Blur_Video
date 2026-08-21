@@ -20,7 +20,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debugConfig")
+        }
         release {
             // Phones only — no x86/x86_64 emulator libs in the release artifact.
             ndk {
@@ -79,6 +91,7 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.10.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
     // YOLOv8 plate_detector.tflite — standard TFLite ops only (no flex / select-tf-ops).

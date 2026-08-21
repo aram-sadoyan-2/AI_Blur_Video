@@ -1,10 +1,7 @@
 package com.naiyados.aiblurvideo.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +20,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,67 +34,38 @@ fun BlurStrengthSlider(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        color = Color.White.copy(alpha = 0.07f),
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White.copy(alpha = 0.06f),
         border = BorderStroke(
             width = 1.dp,
             color = Color.White.copy(alpha = 0.08f)
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    AiBlurColors.Pink.copy(alpha = 0.35f),
-                                    Color.Transparent
-                                )
-                            ),
-                            shape = RoundedCornerShape(999.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.BlurOn,
-                        contentDescription = null,
-                        tint = AiBlurColors.Pink,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
+            Icon(
+                imageVector = Icons.Rounded.BlurOn,
+                contentDescription = null,
+                tint = AiBlurColors.Pink,
+                modifier = Modifier.size(16.dp)
+            )
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Text(
-                    text = "Blur strength",
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 16.sp,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Text(
-                    text = "${(value.coerceIn(0f, 1f) * 100).toInt()}%",
-                    color = Color.White.copy(alpha = 0.72f),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
+            Text(
+                text = "Blur",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
 
             Slider(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp),
+                    .weight(1f)
+                    .height(26.dp),
                 value = value,
                 onValueChange = onValueChange,
                 valueRange = 0f..1f,
@@ -107,6 +74,14 @@ fun BlurStrengthSlider(
                     activeTrackColor = AiBlurColors.Pink,
                     inactiveTrackColor = Color.White.copy(alpha = 0.16f)
                 )
+            )
+
+            Text(
+                text = "${(value.coerceIn(0f, 1f) * 100).toInt()}%",
+                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp,
+                modifier = Modifier.width(32.dp)
             )
         }
     }

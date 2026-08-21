@@ -22,7 +22,7 @@ object PlateBitmapBlur {
         plateRect: RectF,
         strength: Float = 0.65f
     ): Bitmap {
-        val output = source.copy(Bitmap.Config.ARGB_8888, true)
+        val output = if (source.isMutable) source else source.copy(Bitmap.Config.ARGB_8888, true)
         val cover = PlateMaskInsets.paddingForCover(plateRect)
         val left = cover.left.roundToInt().coerceIn(0, output.width - 1)
         val top = cover.top.roundToInt().coerceIn(0, output.height - 1)
@@ -32,24 +32,21 @@ object PlateBitmapBlur {
         val regionWidth = right - left
         val regionHeight = bottom - top
         if (regionWidth < 4 || regionHeight < 4) {
-            android.util.Log.w(
-                "AutoPlateExport",
-                "Blur region too small ${regionWidth}x$regionHeight rect=$plateRect frame=${output.width}x${output.height}"
-            )
             return output
         }
 
         val crop = Bitmap.createBitmap(output, left, top, regionWidth, regionHeight)
         val scale = max(4, (14 * (1.1f - strength)).roundToInt())
-        val blurred = pixelate(crop, scale)
-        val softened = boxBlur(blurred, passes = 2)
+        val smallW = max(2, regionWidth / scale)
+        val smallH = max(2, regionHeight / scale)
+        val small = Bitmap.createScaledBitmap(crop, smallW, smallH, true)
+        val blurred = Bitmap.createScaledBitmap(small, regionWidth, regionHeight, true)
+        small.recycle()
+        crop.recycle()
 
         val canvas = Canvas(output)
-        canvas.drawBitmap(softened, left.toFloat(), top.toFloat(), Paint(Paint.FILTER_BITMAP_FLAG))
-        if (softened != crop) {
-            softened.recycle()
-        }
-        crop.recycle()
+        canvas.drawBitmap(blurred, left.toFloat(), top.toFloat(), Paint(Paint.FILTER_BITMAP_FLAG))
+        blurred.recycle()
         return output
     }
 

@@ -13,8 +13,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.core.view.WindowCompat
+import com.naiyados.aiblurvideo.ui.screens.BatchQueueScreen
+import com.naiyados.aiblurvideo.ui.screens.BlurMode
 import com.naiyados.aiblurvideo.ui.screens.HomeScreen
-import com.naiyados.aiblurvideo.ui.screens.VideoEditorScreen
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 
 class MainActivity : ComponentActivity() {
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val isPremium = remember { mutableStateOf(false) }
                     val showEditor = remember { mutableStateOf(false) }
+                    val showBatchQueue = remember { mutableStateOf(false) }
                     val selectedVideoUri = remember { mutableStateOf<Uri?>(null) }
 
                     val videoPickerLauncher = rememberLauncherForActivityResult(
@@ -48,17 +50,28 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (showEditor.value) {
-                        VideoEditorScreen(
+                        BlurMode(
                             videoUri = selectedVideoUri.value,
                             isPremium = isPremium.value,
                             onBackClick = {
                                 showEditor.value = false
                             },
                             onPremiumClick = {
-                                // TODO: Open PremiumOfferScreen
+                                // Premium action
                             },
                             onSaveClick = {
-                                // TODO: Export processed video
+                                showEditor.value = false
+                            }
+                        )
+                    } else if (showBatchQueue.value) {
+                        BatchQueueScreen(
+                            onBackClick = {
+                                showBatchQueue.value = false
+                            },
+                            onOpenVideo = { uri ->
+                                selectedVideoUri.value = uri
+                                showBatchQueue.value = false
+                                showEditor.value = true
                             }
                         )
                     } else {
@@ -71,8 +84,15 @@ class MainActivity : ComponentActivity() {
                                     )
                                 )
                             },
+                            onOpenBatchQueue = {
+                                showBatchQueue.value = true
+                            },
+                            onOpenVideo = { uri ->
+                                selectedVideoUri.value = uri
+                                showEditor.value = true
+                            },
                             onPremiumClick = {
-                                // TODO: Open PremiumOfferScreen
+                                // Premium action
                             },
                             onOpenProjectsClick = {
                                 showEditor.value = true

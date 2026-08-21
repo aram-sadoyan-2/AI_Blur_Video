@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +28,7 @@ fun EditorTopBar(
     modifier: Modifier = Modifier,
     isPremium: Boolean,
     onBackClick: () -> Unit,
+    onSettingsClick: (() -> Unit)? = null,
     onPremiumClick: () -> Unit
 ) {
     Row(
@@ -59,6 +61,24 @@ fun EditorTopBar(
             fontSize = 22.sp,
             modifier = Modifier.weight(1f)
         )
+
+        if (onSettingsClick != null) {
+            Surface(
+                onClick = onSettingsClick,
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Tune,
+                    contentDescription = "Export Settings",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .size(22.dp)
+                )
+            }
+        }
 
         Surface(
             onClick = onPremiumClick,

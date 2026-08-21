@@ -82,6 +82,21 @@ internal class BitmapVideoEncoder(
         inputSurface.release()
     }
 
+    fun releaseSilently() {
+        try {
+            codec.stop()
+        } catch (_: Throwable) {
+        }
+        try {
+            codec.release()
+        } catch (_: Throwable) {
+        }
+        try {
+            inputSurface.release()
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun drainEncoder(endOfStream: Boolean, presentationTimeUs: Long) {
         while (true) {
             val encoderStatus = codec.dequeueOutputBuffer(bufferInfo, 10_000)

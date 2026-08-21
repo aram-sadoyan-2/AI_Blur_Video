@@ -2,9 +2,14 @@ package com.naiyados.aiblurvideo.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Redo
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VolumeOff
@@ -34,15 +39,20 @@ fun PlaybackControlBar(
     isMuted: Boolean,
     onPlayPauseClick: () -> Unit,
     onToggleMute: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onUndoClick: () -> Unit = {},
+    onRedoClick: () -> Unit = {}
 ) {
     var durationMs by remember { mutableLongStateOf(0L) }
+    var currentPositionMs by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(player) {
         while (player != null) {
             val duration = player.duration
+            val position = player.currentPosition
             durationMs = if (duration > 0L) duration else 0L
-            delay(300)
+            currentPositionMs = if (position > 0L) position else 0L
+            delay(200)
         }
     }
 
@@ -50,34 +60,72 @@ fun PlaybackControlBar(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Timecode display (left)
         Text(
-            modifier = Modifier.weight(1f),
-            text = formatTime(durationMs),
+            text = formatTime(if (durationMs > 0L) durationMs else currentPositionMs),
             color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 17.sp
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            modifier = Modifier.width(60.dp)
         )
 
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Center Play / Pause button
         IconButton(
             onClick = onPlayPauseClick,
-            modifier = Modifier.size(44.dp)
+            modifier = Modifier.size(40.dp)
         ) {
             Icon(
                 imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = Color.White
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
             )
         }
 
-        IconButton(
-            onClick = onToggleMute,
-            modifier = Modifier.size(44.dp)
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Right quick actions (Undo, Redo, Mute)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Icon(
-                imageVector = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
-                contentDescription = if (isMuted) "Unmute" else "Mute",
-                tint = Color.White
-            )
+            IconButton(
+                onClick = onUndoClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.Undo,
+                    contentDescription = "Undo",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onRedoClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.Redo,
+                    contentDescription = "Redo",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onToggleMute,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
+                    contentDescription = if (isMuted) "Unmute" else "Mute",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(19.dp)
+                )
+            }
         }
     }
 }

@@ -14,6 +14,8 @@ object AiBlurColors {
     val Orange = Color(0xFFFF9E2C)
     val Purple = Color(0xFFC86BFF)
     val Blue = Color(0xFF7AA8FF)
+    val Cyan = Color(0xFF00E5FF)
+    val Green = Color(0xFF00E676)
 
     val AccentGradient = Brush.linearGradient(
         colors = listOf(

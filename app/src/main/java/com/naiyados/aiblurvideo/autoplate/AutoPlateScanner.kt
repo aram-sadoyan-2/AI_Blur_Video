@@ -5,8 +5,11 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
 import com.naiyados.aiblurvideo.autoplate.detection.PlateDetectorPipeline
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 class AutoPlateScanner(
     private val context: Context
@@ -14,7 +17,7 @@ class AutoPlateScanner(
 
     suspend fun scan(
         videoUri: Uri,
-        onProgress: suspend (framesScanned: Int, detectionsFound: Int) -> Unit
+        onProgress: suspend (framesScanned: Int, totalFrames: Int, detectionsFound: Int, progress: Float) -> Unit
     ): AutoPlateScanResult = withContext(Dispatchers.IO) {
         val pipeline = PlateDetectorPipeline(context)
         val retriever = MediaMetadataRetriever()
@@ -35,17 +38,24 @@ class AutoPlateScanner(
 
             val stepMs = if (pipeline.isUsingMlDetector) 50L else 100L
             val maxFrames = if (pipeline.isUsingMlDetector) 480 else 240
+            val estimatedTotalFrames = if (durationMs > 0L) {
+                ((durationMs / stepMs) + 1).toInt().coerceIn(1, maxFrames)
+            } else {
+                maxFrames
+            }
 
             Log.d(
                 "AutoPlate",
-                "Scan start detector=${if (pipeline.isUsingMlDetector) "TFLite+track" else "OCR-fallback"}"
+                "Scan start detector=${if (pipeline.isUsingMlDetector) "TFLite+track" else "OCR-fallback"} durationMs=$durationMs estFrames=$estimatedTotalFrames"
             )
 
             withContext(Dispatchers.Main) {
-                onProgress(0, 0)
+                onProgress(0, estimatedTotalFrames, 0, 0f)
             }
 
             while (timeMs <= durationMs && frameCount < maxFrames) {
+                coroutineContext.ensureActive()
+
                 val bitmap = retriever.getFrameAtTime(
                     timeMs * 1000L,
                     MediaMetadataRetriever.OPTION_CLOSEST
@@ -84,8 +94,14 @@ class AutoPlateScanner(
                 }
 
                 frameCount++
+                val completionProgress = if (durationMs > 0L) {
+                    (timeMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    (frameCount.toFloat() / estimatedTotalFrames.toFloat()).coerceIn(0f, 1f)
+                }
+
                 withContext(Dispatchers.Main) {
-                    onProgress(frameCount, allBoxes.size)
+                    onProgress(frameCount, estimatedTotalFrames, allBoxes.size, completionProgress)
                 }
 
                 timeMs += stepMs
@@ -104,6 +120,9 @@ class AutoPlateScanner(
                 confidence = timeline.confidence,
                 dominantText = timeline.dominantText
             )
+        } catch (ce: CancellationException) {
+            Log.d("AutoPlate", "Scan cancelled, freeing resources")
+            throw ce
         } catch (e: Exception) {
             Log.e("AutoPlate", "Scan failed", e)
             AutoPlateScanResult(
@@ -113,8 +132,12 @@ class AutoPlateScanner(
                 dominantText = null
             )
         } finally {
-            retriever.release()
-            pipeline.close()
+            try {
+                retriever.release()
+            } catch (_: Throwable) {}
+            try {
+                pipeline.close()
+            } catch (_: Throwable) {}
         }
     }
 }

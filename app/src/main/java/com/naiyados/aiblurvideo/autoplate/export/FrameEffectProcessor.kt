@@ -1,0 +1,310 @@
+package com.naiyados.aiblurvideo.autoplate.export
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
+import com.naiyados.aiblurvideo.autoplate.PlateMaskInsets
+import com.naiyados.aiblurvideo.autoplate.face.FaceBlurDetector
+import com.naiyados.aiblurvideo.ui.model.BlurMode
+import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
+import com.naiyados.aiblurvideo.ui.model.VideoEditConfig
+import com.naiyados.aiblurvideo.ui.model.VideoFilter
+import kotlin.math.max
+import kotlin.math.roundToInt
+
+object FrameEffectProcessor {
+
+    private var lastFaceDetectTimeMs = -1000L
+    private var cachedFaceRects: List<RectF> = emptyList()
+
+    fun resetFaceCache() {
+        lastFaceDetectTimeMs = -1000L
+        cachedFaceRects = emptyList()
+    }
+
+    suspend fun processFrame(
+        source: Bitmap,
+        timeMs: Long,
+        config: VideoEditConfig,
+        timeline: AutoPlateTimeline? = null
+    ): Bitmap {
+        var current = source
+
+        // 1. Apply Blur / Mask Effects based on BlurMode
+        when (config.blurMode) {
+            BlurMode.AutoPlate -> {
+                if (config.isPlateBlurActive && timeline != null) {
+                    val boxes = timeline.boxesAt(timeMs)
+                    for (box in boxes) {
+                        val processed = PlateBitmapBlur.blurPlateRegion(current, box.rect, config.blurStrength)
+                        if (processed != current && current != source) {
+                            current.recycle()
+                        }
+                        current = processed
+                    }
+                }
+            }
+            BlurMode.FullBlur -> {
+                val blurred = fastBlur(current, config.blurStrength)
+                if (current != source) current.recycle()
+                current = blurred
+            }
+            BlurMode.Face -> {
+                // Throttle face detection to every ~150ms for 5x export acceleration
+                val faces = if (timeMs - lastFaceDetectTimeMs >= 150L || cachedFaceRects.isEmpty()) {
+                    val detected = FaceBlurDetector.detectFaces(current)
+                    if (detected.isNotEmpty() || cachedFaceRects.isEmpty()) {
+                        cachedFaceRects = detected
+                        lastFaceDetectTimeMs = timeMs
+                    }
+                    cachedFaceRects
+                } else {
+                    cachedFaceRects
+                }
+
+                for (faceRect in faces) {
+                    val padded = PlateMaskInsets.paddingForCover(faceRect)
+                    val processed = PlateBitmapBlur.blurPlateRegion(current, padded, config.blurStrength)
+                    if (processed != current && current != source) {
+                        current.recycle()
+                    }
+                    current = processed
+                }
+            }
+            BlurMode.Object -> {
+                val normRect = config.customObjectNormalizedRect
+                if (normRect != null) {
+                    val absoluteRect = RectF(
+                        normRect.left * current.width,
+                        normRect.top * current.height,
+                        normRect.right * current.width,
+                        normRect.bottom * current.height
+                    )
+                    val processed = PlateBitmapBlur.blurPlateRegion(current, absoluteRect, config.blurStrength)
+                    if (processed != current && current != source) {
+                        current.recycle()
+                    }
+                    current = processed
+                }
+            }
+            BlurMode.Background -> {
+                val processed = applyBokehBackgroundBlur(current, config.blurStrength)
+                if (current != source) current.recycle()
+                current = processed
+            }
+            BlurMode.Pixelate -> {
+                val blockSize = config.pixelateBlockSize.coerceIn(8, 64)
+                val pixelated = pixelate(current, blockSize)
+                if (current != source) current.recycle()
+                current = pixelated
+            }
+            BlurMode.Effects, BlurMode.Speed, BlurMode.Crop -> {
+                // Blur not active for pure color filter/speed/crop modes
+            }
+        }
+
+        // 2. Apply Color Filter / Cinematic FX
+        if (config.filter != VideoFilter.NONE) {
+            val filtered = config.filter.applyToBitmap(current, config.filterIntensity)
+            if (current != source && current != filtered) {
+                current.recycle()
+            }
+            current = filtered
+        }
+
+        // 3. Apply Aspect Ratio Crop
+        if (config.aspectRatio != VideoAspectRatio.ORIGINAL) {
+            val cropRect = config.aspectRatio.calculateCropRect(current.width, current.height)
+            val left = cropRect.left.roundToInt().coerceIn(0, current.width - 2)
+            val top = cropRect.top.roundToInt().coerceIn(0, current.height - 2)
+            val width = (cropRect.width().roundToInt() / 2) * 2
+            val height = (cropRect.height().roundToInt() / 2) * 2
+
+            if (width > 8 && height > 8 && (width < current.width || height < current.height)) {
+                val cropped = Bitmap.createBitmap(
+                    current,
+                    left,
+                    top,
+                    width.coerceAtMost(current.width - left),
+                    height.coerceAtMost(current.height - top)
+                )
+                if (current != source && current != cropped) {
+                    current.recycle()
+                }
+                current = cropped
+            }
+        }
+
+        return current
+    }
+
+    fun pixelate(source: Bitmap, scale: Int): Bitmap {
+        val smallW = max(1, source.width / scale)
+        val smallH = max(1, source.height / scale)
+        val small = Bitmap.createScaledBitmap(source, smallW, smallH, true)
+        val pixelated = Bitmap.createScaledBitmap(small, source.width, source.height, false)
+        small.recycle()
+        return pixelated
+    }
+
+    fun blurBitmap(source: Bitmap, blurStrength: Float): Bitmap {
+        return fastBlur(source, blurStrength)
+    }
+
+    fun fastBlur(source: Bitmap, blurStrength: Float): Bitmap {
+        val factor = max(4, (blurStrength * 24).roundToInt())
+        val smallW = max(2, source.width / factor)
+        val smallH = max(2, source.height / factor)
+        val small = Bitmap.createScaledBitmap(source, smallW, smallH, true)
+        // Multi-stage down-up sampling produces silky smooth Gaussian-like blur
+        val midW = max(2, smallW * 2)
+        val midH = max(2, smallH * 2)
+        val mid = Bitmap.createScaledBitmap(small, midW, midH, true)
+        small.recycle()
+        val result = Bitmap.createScaledBitmap(mid, source.width, source.height, true)
+        mid.recycle()
+        return result
+    }
+
+    fun fastBlur(source: Bitmap, scale: Int, passes: Int): Bitmap {
+        val factor = scale.coerceIn(4, 32)
+        val smallW = max(2, source.width / factor)
+        val smallH = max(2, source.height / factor)
+        val small = Bitmap.createScaledBitmap(source, smallW, smallH, true)
+        val result = Bitmap.createScaledBitmap(small, source.width, source.height, true)
+        small.recycle()
+        return result
+    }
+
+    private fun applyBokehBackgroundBlur(source: Bitmap, strength: Float): Bitmap {
+        val blurred = fastBlur(source, strength)
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+
+        // Draw blurred background
+        canvas.drawBitmap(blurred, 0f, 0f, null)
+        blurred.recycle()
+
+        // Create vignette mask for crisp center foreground
+        val maskBitmap = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val maskCanvas = Canvas(maskBitmap)
+        val cx = source.width / 2f
+        val cy = source.height / 2f
+        val radius = max(source.width, source.height) * (0.55f - strength * 0.15f)
+
+        val gradient = RadialGradient(
+            cx, cy, radius,
+            intArrayOf(Color.BLACK, Color.BLACK, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.45f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = gradient
+        }
+        maskCanvas.drawRect(0f, 0f, source.width.toFloat(), source.height.toFloat(), maskPaint)
+
+        // Draw sharp original inside the mask
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+        }
+        val sharpPortion = source.copy(Bitmap.Config.ARGB_8888, true)
+        val sharpCanvas = Canvas(sharpPortion)
+        sharpCanvas.drawBitmap(maskBitmap, 0f, 0f, paint)
+        maskBitmap.recycle()
+
+        canvas.drawBitmap(sharpPortion, 0f, 0f, null)
+        sharpPortion.recycle()
+
+        return output
+    }
+
+    private fun boxBlurPass(input: Bitmap, output: Bitmap, radius: Int) {
+        val width = input.width
+        val height = input.height
+        val pixels = IntArray(width * height)
+        input.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        val horizontal = IntArray(pixels.size)
+        val window = radius * 2 + 1
+
+        for (y in 0 until height) {
+            var sumA = 0
+            var sumR = 0
+            var sumG = 0
+            var sumB = 0
+            val rowOffset = y * width
+
+            for (i in -radius..radius) {
+                val clampedX = i.coerceIn(0, width - 1)
+                val c = pixels[rowOffset + clampedX]
+                sumA += (c ushr 24) and 0xff
+                sumR += (c ushr 16) and 0xff
+                sumG += (c ushr 8) and 0xff
+                sumB += c and 0xff
+            }
+
+            for (x in 0 until width) {
+                horizontal[rowOffset + x] =
+                    ((sumA / window) shl 24) or
+                            ((sumR / window) shl 16) or
+                            ((sumG / window) shl 8) or
+                            (sumB / window)
+
+                val leftX = (x - radius).coerceIn(0, width - 1)
+                val rightX = (x + radius + 1).coerceIn(0, width - 1)
+                val leftColor = pixels[rowOffset + leftX]
+                val rightColor = pixels[rowOffset + rightX]
+
+                sumA += ((rightColor ushr 24) and 0xff) - ((leftColor ushr 24) and 0xff)
+                sumR += ((rightColor ushr 16) and 0xff) - ((leftColor ushr 16) and 0xff)
+                sumG += ((rightColor ushr 8) and 0xff) - ((leftColor ushr 8) and 0xff)
+                sumB += (rightColor and 0xff) - (leftColor and 0xff)
+            }
+        }
+
+        val outPixels = IntArray(pixels.size)
+        for (x in 0 until width) {
+            var sumA = 0
+            var sumR = 0
+            var sumG = 0
+            var sumB = 0
+
+            for (i in -radius..radius) {
+                val clampedY = i.coerceIn(0, height - 1)
+                val c = horizontal[clampedY * width + x]
+                sumA += (c ushr 24) and 0xff
+                sumR += (c ushr 16) and 0xff
+                sumG += (c ushr 8) and 0xff
+                sumB += c and 0xff
+            }
+
+            for (y in 0 until height) {
+                outPixels[y * width + x] =
+                    ((sumA / window) shl 24) or
+                            ((sumR / window) shl 16) or
+                            ((sumG / window) shl 8) or
+                            (sumB / window)
+
+                val topY = (y - radius).coerceIn(0, height - 1)
+                val bottomY = (y + radius + 1).coerceIn(0, height - 1)
+                val topColor = horizontal[topY * width + x]
+                val bottomColor = horizontal[bottomY * width + x]
+
+                sumA += ((bottomColor ushr 24) and 0xff) - ((topColor ushr 24) and 0xff)
+                sumR += ((bottomColor ushr 16) and 0xff) - ((topColor ushr 16) and 0xff)
+                sumG += ((bottomColor ushr 8) and 0xff) - ((topColor ushr 8) and 0xff)
+                sumB += (bottomColor and 0xff) - (topColor and 0xff)
+            }
+        }
+
+        output.setPixels(outPixels, 0, width, 0, 0, width, height)
+    }
+}

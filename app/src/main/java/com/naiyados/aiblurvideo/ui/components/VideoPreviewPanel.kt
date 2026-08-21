@@ -1,7 +1,9 @@
 package com.naiyados.aiblurvideo.ui.components
 
 import android.graphics.Bitmap
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
+import android.graphics.RectF
 import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.Shader
 import android.os.Build
@@ -9,6 +11,8 @@ import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,8 +23,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VideoFile
@@ -36,21 +43,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import com.naiyados.aiblurvideo.autoplate.export.FrameEffectProcessor
 import com.naiyados.aiblurvideo.ui.model.BlurMode
+import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
+import com.naiyados.aiblurvideo.ui.model.VideoFilter
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun VideoPreviewPanel(
@@ -61,10 +73,32 @@ fun VideoPreviewPanel(
     onPlayPauseClick: () -> Unit,
     modifier: Modifier = Modifier,
     scrubPreviewBitmap: Bitmap? = null,
+    selectedFilter: VideoFilter = VideoFilter.NONE,
+    filterIntensity: Float = 1.0f,
+    pixelateBlockSize: Int = 24,
+    aspectRatio: VideoAspectRatio = VideoAspectRatio.ORIGINAL,
+    customObjectNormalizedRect: RectF? = null,
+    onCustomObjectRectChange: (RectF) -> Unit = {}
 ) {
     val blurRadiusPx = when (selectedMode) {
         BlurMode.FullBlur -> blurStrength.coerceIn(0f, 1f) * 55f
+        BlurMode.Background -> blurStrength.coerceIn(0f, 1f) * 35f
+        BlurMode.Pixelate -> blurStrength.coerceIn(0f, 1f) * 40f
         else -> 0f
+    }
+
+    val previewRatio = aspectRatio.ratioValue ?: (9f / 16f)
+
+    val effectiveScrubBitmap = remember(scrubPreviewBitmap, selectedMode, blurStrength) {
+        if (scrubPreviewBitmap != null && selectedMode == BlurMode.FullBlur && blurStrength > 0.05f) {
+            try {
+                FrameEffectProcessor.blurBitmap(scrubPreviewBitmap, blurStrength)
+            } catch (e: Exception) {
+                scrubPreviewBitmap
+            }
+        } else {
+            scrubPreviewBitmap
+        }
     }
 
     Box(
@@ -76,7 +110,7 @@ fun VideoPreviewPanel(
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .aspectRatio(9f / 16f)
+                .aspectRatio(previewRatio)
                 .background(Color.Black)
                 .clipToBounds(),
             contentAlignment = Alignment.Center
@@ -90,93 +124,205 @@ fun VideoPreviewPanel(
                         .graphicsLayer {
                             clip = true
 
-                            renderEffect =
-                                if (
-                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                                    blurRadiusPx > 0.5f
-                                ) {
-                                    AndroidRenderEffect
-                                        .createBlurEffect(
-                                            blurRadiusPx,
-                                            blurRadiusPx,
-                                            Shader.TileMode.CLAMP
-                                        )
-                                        .asComposeRenderEffect()
-                                } else {
-                                    null
-                                }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val colorFilterEffect = if (selectedFilter != VideoFilter.NONE) {
+                                    val cm = selectedFilter.createColorMatrix(filterIntensity)
+                                    AndroidRenderEffect.createColorFilterEffect(
+                                        ColorMatrixColorFilter(cm)
+                                    )
+                                } else null
+
+                                renderEffect = colorFilterEffect?.asComposeRenderEffect()
+                            }
                         }
                 ) {
-                    PlayerTextureViewFit(
-                        player = player
-                    )
+                    PlayerTextureViewFit(player = player)
 
-                    if (scrubPreviewBitmap != null) {
+                    if (effectiveScrubBitmap != null) {
                         Image(
-                            bitmap = scrubPreviewBitmap.asImageBitmap(),
+                            bitmap = effectiveScrubBitmap.asImageBitmap(),
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit
                         )
                     }
                 }
-            }
 
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp),
-                color = Color.Black.copy(alpha = 0.34f),
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.10f)
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = null,
-                        tint = AiBlurColors.Orange,
-                        modifier = Modifier.size(16.dp)
+                // Real-time Full Blur Glass Overlay
+                if (selectedMode == BlurMode.FullBlur && blurStrength > 0.02f) {
+                    FullBlurLiveOverlay(
+                        blurStrength = blurStrength,
+                        modifier = Modifier.fillMaxSize()
                     )
+                }
 
-                    Text(
-                        text = selectedMode.label,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                // Real-time Bokeh Background Blur Overlay
+                if (selectedMode == BlurMode.Background && blurStrength > 0.02f) {
+                    BackgroundBlurLiveOverlay(
+                        blurStrength = blurStrength,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // Real-time Pixelate Grid Overlay
+                if (selectedMode == BlurMode.Pixelate) {
+                    PixelateLiveOverlay(
+                        blockSize = pixelateBlockSize,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // Interactive Custom Object Box Overlay
+                if (selectedMode == BlurMode.Object) {
+                    CustomObjectTouchOverlay(
+                        normalizedRect = customObjectNormalizedRect,
+                        onRectChanged = onCustomObjectRectChange,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
 
-            Surface(
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.Black.copy(alpha = 0.30f),
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.14f)
-                )
-            ) {
-                IconButton(
-                    onClick = onPlayPauseClick,
-                    modifier = Modifier.size(58.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) {
-                            Icons.Rounded.Pause
-                        } else {
-                            Icons.Rounded.PlayArrow
-                        },
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(34.dp)
+            if (selectedMode != BlurMode.AutoPlate) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.Black.copy(alpha = 0.65f),
+                    border = BorderStroke(
+                        width = 0.8.dp,
+                        color = Color.White.copy(alpha = 0.18f)
                     )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (selectedMode == BlurMode.FullBlur) Icons.Rounded.BlurOn else Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = if (selectedMode == BlurMode.FullBlur) AiBlurColors.Pink else AiBlurColors.Orange,
+                            modifier = Modifier.size(13.dp)
+                        )
+
+                        Text(
+                            text = selectedMode.label + if (selectedMode == BlurMode.FullBlur) " (${(blurStrength * 100).toInt()}%)" else if (selectedFilter != VideoFilter.NONE) " • ${selectedFilter.title}" else "",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.5.sp
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun FullBlurLiveOverlay(
+    blurStrength: Float,
+    modifier: Modifier = Modifier
+) {
+    val clamped = blurStrength.coerceIn(0.05f, 1f)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clipToBounds()
+    ) {
+        // Multi-level frosted diffusion veil
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            // Layer 1: Base frost diffusion
+            drawRect(
+                color = Color(0x40101420).copy(alpha = 0.25f + clamped * 0.45f)
+            )
+
+            // Layer 2: Vignette / depth scatter
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0x30FFFFFF).copy(alpha = clamped * 0.20f),
+                        Color(0x80050812).copy(alpha = 0.35f + clamped * 0.50f)
+                    ),
+                    center = Offset(size.width / 2f, size.height / 2f),
+                    radius = maxOf(size.width, size.height) * 0.7f
+                )
+            )
+        }
+
+        // Frosted glass refraction layer
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val radiusPx = clamped * 50f
+                        renderEffect = AndroidRenderEffect.createBlurEffect(
+                            radiusPx,
+                            radiusPx,
+                            Shader.TileMode.CLAMP
+                        ).asComposeRenderEffect()
+                    }
+                    alpha = 0.6f + (clamped * 0.4f)
+                }
+                .background(Color.White.copy(alpha = 0.08f + clamped * 0.12f))
+        )
+    }
+}
+
+@Composable
+fun BackgroundBlurLiveOverlay(
+    blurStrength: Float,
+    modifier: Modifier = Modifier
+) {
+    val clamped = blurStrength.coerceIn(0.05f, 1f)
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val clearRadius = maxOf(size.width, size.height) * (0.50f - clamped * 0.18f)
+
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    Color.Transparent,
+                    Color(0xFF0A0D18).copy(alpha = 0.50f * clamped),
+                    Color(0xFF050810).copy(alpha = 0.85f * clamped)
+                ),
+                center = Offset(cx, cy),
+                radius = clearRadius * 1.5f
+            )
+        )
+    }
+}
+
+@Composable
+fun PixelateLiveOverlay(
+    blockSize: Int,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val step = blockSize.toFloat().coerceIn(12f, 48f)
+        val gridColor = Color.Black.copy(alpha = 0.28f)
+        var x = 0f
+        while (x < size.width) {
+            drawLine(
+                color = gridColor,
+                start = Offset(x, 0f),
+                end = Offset(x, size.height),
+                strokeWidth = 1.5f
+            )
+            x += step
+        }
+        var y = 0f
+        while (y < size.height) {
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 1.5f
+            )
+            y += step
         }
     }
 }
@@ -198,8 +344,6 @@ fun PlayerTextureViewFit(
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 clipChildren = true
-                clipToPadding = true
-                setBackgroundColor(android.graphics.Color.BLACK)
             }
 
             val textureView = TextureView(ctx).apply {
@@ -207,113 +351,73 @@ fun PlayerTextureViewFit(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
-
-                textureViewRef = this
-
-                /**
-                 * Important:
-                 * Set video TextureView only once.
-                 * Do not do this inside update.
-                 */
-                player.setVideoTextureView(this)
-
-                addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                    (view as? TextureView)?.post {
-                        view.applyFitTransform(player.videoSize)
-                    }
-                }
-
-                post {
-                    applyFitTransform(player.videoSize)
-                }
             }
 
             container.addView(textureView)
+            player.setVideoTextureView(textureView)
+            textureViewRef = textureView
             container
         },
         update = { container ->
-            container.clipChildren = true
-            container.clipToPadding = true
-
-            val textureView = container.getChildAt(0) as? TextureView
-            if (textureView != null) {
-                textureViewRef = textureView
-
-                /**
-                 * Important:
-                 * Do not call player.setVideoTextureView(textureView) here.
-                 * Do not call setRenderEffect() on TextureView here.
-                 *
-                 * Blur is applied above with Compose graphicsLayer.
-                 */
+            val currentTexture = textureViewRef ?: container.getChildAt(0) as? TextureView
+            currentTexture?.let { texture ->
+                player.setVideoTextureView(texture)
+                applyFitMatrix(
+                    view = texture,
+                    videoWidth = player.videoSize.width,
+                    videoHeight = player.videoSize.height
+                )
             }
-        },
-        onRelease = { container ->
-            val textureView = container.getChildAt(0) as? TextureView
-            if (textureView != null) {
-                player.clearVideoTextureView(textureView)
-            }
-
-            textureViewRef = null
         }
     )
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                textureViewRef?.post {
-                    textureViewRef?.applyFitTransform(videoSize)
-                }
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                textureViewRef?.post {
-                    textureViewRef?.applyFitTransform(player.videoSize)
+                textureViewRef?.let { texture ->
+                    applyFitMatrix(
+                        view = texture,
+                        videoWidth = videoSize.width,
+                        videoHeight = videoSize.height
+                    )
                 }
             }
         }
 
         player.addListener(listener)
 
+        textureViewRef?.let { texture ->
+            applyFitMatrix(
+                view = texture,
+                videoWidth = player.videoSize.width,
+                videoHeight = player.videoSize.height
+            )
+        }
+
         onDispose {
             player.removeListener(listener)
+            player.clearVideoTextureView(textureViewRef)
         }
     }
 }
 
-private fun TextureView.applyFitTransform(
-    videoSize: VideoSize
+private fun applyFitMatrix(
+    view: TextureView,
+    videoWidth: Int,
+    videoHeight: Int
 ) {
-    val viewWidth = width.toFloat()
-    val viewHeight = height.toFloat()
+    val viewWidth = view.width.toFloat()
+    val viewHeight = view.height.toFloat()
 
-    val rawVideoWidth = videoSize.width
-    val rawVideoHeight = videoSize.height
-
-    if (
-        viewWidth <= 0f ||
-        viewHeight <= 0f ||
-        rawVideoWidth <= 0 ||
-        rawVideoHeight <= 0
-    ) {
-        setTransform(null)
+    if (viewWidth <= 0f || viewHeight <= 0f || videoWidth <= 0 || videoHeight <= 0) {
         return
     }
 
-    val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) {
-        videoSize.pixelWidthHeightRatio
-    } else {
-        1f
-    }
-
-    val videoWidth = rawVideoWidth * pixelRatio
-    val videoHeight = rawVideoHeight.toFloat()
-
     val viewAspect = viewWidth / viewHeight
-    val videoAspect = videoWidth / videoHeight
+    val videoAspect = videoWidth.toFloat() / videoHeight.toFloat()
 
-    val scaleX: Float
-    val scaleY: Float
+    var scaleX = 1f
+    var scaleY = 1f
 
     if (videoAspect > viewAspect) {
         scaleX = 1f
@@ -331,32 +435,30 @@ private fun TextureView.applyFitTransform(
         viewHeight / 2f
     )
 
-    setTransform(matrix)
+    view.setTransform(matrix)
+    view.invalidate()
 }
 
 @Composable
 private fun EmptyPreview() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.VideoFile,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(42.dp)
-            )
+        Icon(
+            imageVector = Icons.Rounded.VideoFile,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.28f),
+            modifier = Modifier.size(54.dp)
+        )
 
-            Text(
-                text = "No video selected",
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+        Text(
+            text = "No Video Selected",
+            color = Color.White.copy(alpha = 0.60f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(top = 10.dp)
+        )
     }
 }

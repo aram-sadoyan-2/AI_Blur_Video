@@ -24,7 +24,8 @@ class AutoPlateLiveFollower(
         videoUri: Uri,
         readPositionMs: () -> Long,
         shouldContinue: () -> Boolean,
-        onBox: suspend (AutoPlateBox?) -> Unit
+        onBox: suspend (AutoPlateBox?) -> Unit,
+        onStats: (suspend (PlateInferenceStats) -> Unit)? = null
     ) = withContext(Dispatchers.IO) {
         grabber.open(videoUri)
         pipeline.resetTrack()
@@ -35,8 +36,22 @@ class AutoPlateLiveFollower(
                 val bitmap = grabber.frameAt(timeMs)
                 if (bitmap != null) {
                     try {
+                        val startNs = System.nanoTime()
                         val boxes = pipeline.detectFrame(bitmap, timeMs)
-                        onBox(boxes.firstOrNull())
+                        val elapsedMs = ((System.nanoTime() - startNs) / 1_000_000L).coerceAtLeast(1L)
+                        val firstBox = boxes.firstOrNull()
+
+                        onBox(firstBox)
+                        onStats?.invoke(
+                            PlateInferenceStats(
+                                detectedCount = boxes.size,
+                                latencyMs = elapsedMs,
+                                isLiveTracking = true,
+                                confidence = firstBox?.confidence ?: 0f,
+                                dominantText = firstBox?.text,
+                                detectorEngine = if (pipeline.isUsingMlDetector) "TFLite SSD" else "ML Kit CV"
+                            )
+                        )
                     } finally {
                         bitmap.recycle()
                     }
@@ -47,6 +62,13 @@ class AutoPlateLiveFollower(
             Log.e(TAG, "Live follow failed", e)
         } finally {
             onBox(null)
+            onStats?.invoke(
+                PlateInferenceStats(
+                    detectedCount = 0,
+                    latencyMs = 0L,
+                    isLiveTracking = false
+                )
+            )
         }
     }
 

@@ -8,7 +8,7 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,7 +25,10 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.Icon
@@ -67,9 +71,12 @@ private data class TimelineFrame(
 fun VideoFrameStripSection(
     videoUri: Uri?,
     modifier: Modifier = Modifier,
+    currentPositionMs: Long = 0L,
+    isPlaying: Boolean = false,
     maxDurationSeconds: Int = 30,
     onSeekTo: (Long) -> Unit,
-    onScrubFrameChange: (Bitmap?) -> Unit = {}
+    onScrubFrameChange: (Bitmap?) -> Unit = {},
+    onScrubbingStateChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -125,54 +132,22 @@ fun VideoFrameStripSection(
         }
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = Color.White.copy(alpha = 0.055f),
-        border = BorderStroke(
-            width = 1.dp,
-            color = Color.White.copy(alpha = 0.08f)
-        )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Transparent)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Movie,
-                    contentDescription = null,
-                    tint = AiBlurColors.Pink,
-                    modifier = Modifier.size(17.dp)
-                )
-
-                Spacer(modifier = Modifier.width(7.dp))
-
-                Text(
-                    text = when {
-                        loading && frames.isEmpty() -> "Loading timeline..."
-                        errorText != null -> errorText ?: "Timeline"
-                        else -> "Timeline"
-                    },
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-            }
-
-            FixedCenterTimeline(
-                frames = frames,
-                durationMs = durationMs,
-                scrollState = scrollState,
-                maxDurationSeconds = maxDurationSeconds,
-                onSeekTo = onSeekTo,
-                onScrubFrameChange = onScrubFrameChange
-            )
-        }
+        FixedCenterTimeline(
+            frames = frames,
+            durationMs = durationMs,
+            currentPositionMs = currentPositionMs,
+            isPlaying = isPlaying,
+            scrollState = scrollState,
+            maxDurationSeconds = maxDurationSeconds,
+            onSeekTo = onSeekTo,
+            onScrubFrameChange = onScrubFrameChange,
+            onScrubbingStateChanged = onScrubbingStateChanged
+        )
     }
 }
 
@@ -180,126 +155,208 @@ fun VideoFrameStripSection(
 private fun FixedCenterTimeline(
     frames: List<TimelineFrame>,
     durationMs: Long,
+    currentPositionMs: Long,
+    isPlaying: Boolean,
     scrollState: androidx.compose.foundation.ScrollState,
     maxDurationSeconds: Int,
     onSeekTo: (Long) -> Unit,
-    onScrubFrameChange: (Bitmap?) -> Unit
+    onScrubFrameChange: (Bitmap?) -> Unit,
+    onScrubbingStateChanged: (Boolean) -> Unit
 ) {
     val density = LocalDensity.current
     val latestOnSeekTo by rememberUpdatedState(onSeekTo)
     val latestOnScrubFrameChange by rememberUpdatedState(onScrubFrameChange)
+    val latestOnScrubbingStateChanged by rememberUpdatedState(onScrubbingStateChanged)
+    val latestFrames by rememberUpdatedState(frames)
+    val latestDurationMs by rememberUpdatedState(durationMs)
 
-    val secondWidth = 38.dp
-    val secondWidthPx = with(density) {
-        secondWidth.toPx()
-    }
+    val secondWidth = 44.dp
+    val secondWidthPx = with(density) { secondWidth.toPx() }
+    val latestSecondWidthPx by rememberUpdatedState(secondWidthPx)
 
     val safeDurationMs = durationMs.coerceAtLeast(1L)
-
     val secondCount = ((safeDurationMs + 999L) / 1000L)
         .toInt()
         .coerceAtLeast(1)
         .coerceAtMost(maxDurationSeconds)
 
-    fun currentSeekMsFromScroll(): Long {
-        val seconds = scrollState.value / secondWidthPx
+    var isUserDragging by remember { mutableStateOf(false) }
 
+    // Synchronize timeline scroll position with video playback
+    LaunchedEffect(currentPositionMs, isUserDragging, secondWidthPx) {
+        if (!isUserDragging && secondWidthPx > 0f) {
+            val targetScroll = ((currentPositionMs / 1000f) * secondWidthPx).toInt().coerceAtLeast(0)
+            if (kotlin.math.abs(scrollState.value - targetScroll) > 1) {
+                scrollState.scrollTo(targetScroll)
+            }
+        }
+    }
+
+    fun currentSeekMsFromScroll(): Long {
+        val sWidthPx = latestSecondWidthPx
+        if (sWidthPx <= 0f) return 0L
+        val maxDur = latestDurationMs.coerceAtLeast(1L)
+        val seconds = scrollState.value / sWidthPx
         return (seconds * 1000f)
             .roundToLong()
-            .coerceIn(0L, safeDurationMs)
+            .coerceIn(0L, maxDur)
     }
 
-    fun updatePreviewOnly() {
-        val seekMs = currentSeekMsFromScroll()
-
-        val previewFrame = frames.minByOrNull { frame ->
-            kotlin.math.abs(frame.timeMs - seekMs)
+    fun updateScrubFrame(seekMs: Long) {
+        val currentFrames = latestFrames
+        if (currentFrames.isNotEmpty()) {
+            val previewFrame = currentFrames.minByOrNull { frame ->
+                kotlin.math.abs(frame.timeMs - seekMs)
+            }
+            latestOnScrubFrameChange(previewFrame?.bitmap)
         }
-
-        latestOnScrubFrameChange(previewFrame?.bitmap)
-    }
-
-    fun finishSeek() {
-        val seekMs = currentSeekMsFromScroll()
-
-        val previewFrame = frames.minByOrNull { frame ->
-            kotlin.math.abs(frame.timeMs - seekMs)
-        }
-
-        latestOnScrubFrameChange(previewFrame?.bitmap)
-
-        // Seek only once on release.
-        // This avoids ExoPlayer lagging behind your finger.
-        latestOnSeekTo(seekMs)
     }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(82.dp)
+            .height(130.dp)
     ) {
         val sidePadding = maxWidth / 2
-        val totalWidth = sidePadding + (secondWidth * secondCount) + sidePadding
+        val totalWidth = sidePadding + (secondWidth * secondCount) + 56.dp + sidePadding
 
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(82.dp)
-                .pointerInput(safeDurationMs, secondWidthPx, frames.size) {
-                    detectDragGestures(
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
                         onDragStart = {
-                            updatePreviewOnly()
+                            isUserDragging = true
+                            latestOnScrubbingStateChanged(true)
+                            val seekMs = currentSeekMsFromScroll()
+                            latestOnSeekTo(seekMs)
+                            updateScrubFrame(seekMs)
                         },
-                        onDrag = { change, dragAmount ->
+                        onHorizontalDrag = { change, dragAmount ->
                             change.consume()
-
-                            scrollState.dispatchRawDelta(-dragAmount.x)
-
-                            // Show bitmap preview while dragging.
-                            // Do NOT seek ExoPlayer here.
-                            updatePreviewOnly()
+                            scrollState.dispatchRawDelta(-dragAmount)
+                            val seekMs = currentSeekMsFromScroll()
+                            latestOnSeekTo(seekMs)
+                            updateScrubFrame(seekMs)
                         },
                         onDragEnd = {
-                            finishSeek()
-
-                            // Important:
-                            // Do NOT clear scrub preview here.
-                            // Parent will clear it after ExoPlayer renders final frame.
+                            val seekMs = currentSeekMsFromScroll()
+                            latestOnSeekTo(seekMs)
+                            updateScrubFrame(seekMs)
+                            isUserDragging = false
+                            latestOnScrubbingStateChanged(false)
                         },
                         onDragCancel = {
-                            finishSeek()
+                            val seekMs = currentSeekMsFromScroll()
+                            latestOnSeekTo(seekMs)
+                            updateScrubFrame(seekMs)
+                            isUserDragging = false
+                            latestOnScrubbingStateChanged(false)
                         }
                     )
                 }
         ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .horizontalScroll(
-                        state = scrollState,
-                        enabled = false
-                    )
+                    .horizontalScroll(state = scrollState, enabled = false)
                     .requiredWidth(totalWidth)
-                    .height(82.dp),
-                verticalAlignment = Alignment.Top
+                    .fillMaxHeight()
             ) {
-                Spacer(modifier = Modifier.width(sidePadding))
+                // 1. Time Ruler Bar
+                Row(
+                    modifier = Modifier
+                        .height(22.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(modifier = Modifier.width(sidePadding))
 
-                repeat(secondCount) { second ->
-                    val frame = frames.firstOrNull {
-                        it.timeMs >= second * 1000L &&
-                                it.timeMs < (second + 1) * 1000L
+                    repeat(secondCount) { second ->
+                        Box(
+                            modifier = Modifier
+                                .width(secondWidth)
+                                .fillMaxHeight(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = formatSecondLabel(second),
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 10.sp
+                            )
+                        }
                     }
 
-                    TimelineSecondItem(
-                        second = second,
-                        frame = frame,
-                        width = secondWidth
-                    )
+                    Spacer(modifier = Modifier.width(sidePadding + 56.dp))
                 }
 
-                Spacer(modifier = Modifier.width(sidePadding))
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 2. Video Clips Track
+                Row(
+                    modifier = Modifier
+                        .height(52.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(modifier = Modifier.width(sidePadding))
+
+                    // Strip of video thumbnails with rounded corners
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF1E2026),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                        modifier = Modifier.height(52.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxHeight(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            repeat(secondCount) { second ->
+                                val frame = frames.firstOrNull {
+                                    it.timeMs >= second * 1000L && it.timeMs < (second + 1) * 1000L
+                                }
+                                TimelineSecondThumbnailItem(
+                                    frame = frame,
+                                    width = secondWidth,
+                                    height = 52.dp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Pro Add (+) button at the end of the track
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color.White,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = "Add clip",
+                                tint = Color.Black,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(sidePadding))
+                }
+
+                // 3. Dark Secondary Audio/Timeline space
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .padding(horizontal = sidePadding)
+                )
             }
 
+            // Fixed Center White Playhead Line (Spans the entire height)
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -307,72 +364,38 @@ private fun FixedCenterTimeline(
                     .fillMaxHeight()
                     .background(Color.White)
             )
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .size(10.dp)
-                    .background(
-                        color = Color.White,
-                        shape = RoundedCornerShape(50)
-                    )
-            )
         }
     }
 }
 
 @Composable
-private fun TimelineSecondItem(
-    second: Int,
+private fun TimelineSecondThumbnailItem(
     frame: TimelineFrame?,
-    width: Dp
+    width: Dp,
+    height: Dp
 ) {
-    val imageHeight = 58.dp
-
-    val imageWidth = remember(frame?.bitmap) {
-        if (frame?.bitmap == null) {
-            30.dp
-        } else {
-            val ratio = frame.bitmap.width.toFloat() / frame.bitmap.height.toFloat()
-            (58f * ratio).dp.coerceIn(24.dp, width)
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .width(width)
-            .height(82.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    if (frame?.bitmap != null) {
+        Image(
+            bitmap = frame.bitmap.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier
+                .width(width)
+                .height(height),
+            contentScale = ContentScale.Crop
+        )
+    } else {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(18.dp),
+                .width(width)
+                .height(height)
+                .background(Color(0xFF23252E)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = formatSecondLabel(second),
-                color = Color.White.copy(alpha = 0.62f),
-                fontWeight = FontWeight.Bold,
-                fontSize = 9.sp
-            )
-        }
-
-        if (frame != null) {
-            Image(
-                bitmap = frame.bitmap.asImageBitmap(),
+            Icon(
+                imageVector = Icons.Rounded.Movie,
                 contentDescription = null,
-                modifier = Modifier
-                    .width(imageWidth)
-                    .height(imageHeight),
-                contentScale = ContentScale.Fit
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .width(imageWidth)
-                    .height(imageHeight)
-                    .background(Color.White.copy(alpha = 0.08f))
+                tint = Color.White.copy(alpha = 0.2f),
+                modifier = Modifier.size(16.dp)
             )
         }
     }

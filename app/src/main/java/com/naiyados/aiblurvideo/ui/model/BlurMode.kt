@@ -3,10 +3,13 @@ package com.naiyados.aiblurvideo.ui.model
 enum class BlurMode(
     val label: String
 ) {
-    AutoPlate("Auto plate"),
-    FullBlur("Full blur"),
+    AutoPlate("Auto Plate"),
+    FullBlur("Full Blur"),
     Background("Background"),
-    Face("Face"),
-    Object("Object"),
-    Pixelate("Pixelate")
+    Face("Face Blur"),
+    Object("Custom Object"),
+    Pixelate("Pixelate"),
+    Effects("Color Filters"),
+    Speed("Speed"),
+    Crop("Trim & Crop")
 }

@@ -15,10 +15,15 @@ import android.provider.MediaStore
 import android.util.Log
 import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
 import com.naiyados.aiblurvideo.autoplate.VideoOrientation
+import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
+import com.naiyados.aiblurvideo.ui.model.VideoEditConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
+import kotlin.coroutines.coroutineContext
 import kotlin.math.max
 
 class AutoPlateVideoExporter(
@@ -41,6 +46,27 @@ class AutoPlateVideoExporter(
         timeline: AutoPlateTimeline,
         durationMs: Long,
         blurStrength: Float = 0.65f,
+        exportSettings: ExportSettings = ExportSettings(),
+        onProgress: (Float) -> Unit = {}
+    ): ExportResult {
+        val config = VideoEditConfig(
+            blurStrength = blurStrength,
+            exportSettings = exportSettings
+        )
+        return exportWithConfig(
+            inputUri = inputUri,
+            config = config,
+            timeline = timeline,
+            durationMs = durationMs,
+            onProgress = onProgress
+        )
+    }
+
+    suspend fun exportWithConfig(
+        inputUri: Uri,
+        config: VideoEditConfig,
+        timeline: AutoPlateTimeline? = null,
+        durationMs: Long = 0L,
         onProgress: (Float) -> Unit = {}
     ): ExportResult = withContext(Dispatchers.IO) {
         val orientation = VideoOrientation.load(context, inputUri)
@@ -51,145 +77,179 @@ class AutoPlateVideoExporter(
             MediaMetadataRetriever.METADATA_KEY_DURATION
         )?.toLongOrNull() ?: durationMs
 
-        val exportDurationMs = max(durationMs, fileDurationMs)
-        val frameRate = 24
-        val frameStepUs = 1_000_000L / frameRate
-        val totalFrames = max(1, (exportDurationMs * frameRate / 1000).toInt())
+        val fullDurationMs = max(durationMs, fileDurationMs)
+        val startMs = config.trimStartMs.coerceIn(0L, fullDurationMs)
+        val endMs = if (config.trimEndMs > startMs) {
+            config.trimEndMs.coerceAtMost(fullDurationMs)
+        } else {
+            fullDurationMs
+        }
+        val targetDurationMs = max(500L, endMs - startMs)
 
-        val probeRaw = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST)
-            ?: throw IllegalStateException("Could not read video frame")
+        val frameRate = 24
+        // Speed affects how fast we step through the source video vs output timestamps
+        val speedFactor = config.playbackSpeed.coerceIn(0.25f, 4.0f)
+        val sourceStepUs = (1_000_000L / frameRate * speedFactor).toLong()
+        val totalFrames = max(1, ((targetDurationMs / speedFactor) * frameRate / 1000).toInt())
+
+        val probeRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            retriever.getScaledFrameAtTime(startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST, 1280, 720)
+                ?: retriever.getFrameAtTime(startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
+        } else {
+            retriever.getFrameAtTime(startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
+        } ?: throw IllegalStateException("Could not read video frame")
 
         val rotation = orientation.rotationDegrees
         val probe = VideoOrientation.toDisplayBitmap(probeRaw, rotation)
-        val encodeWidth = probe.width
-        val encodeHeight = probe.height
+        
+        // Calculate dimensions with aspect ratio
+        val (baseW, baseH) = if (config.aspectRatio != VideoAspectRatio.ORIGINAL) {
+            val crop = config.aspectRatio.calculateCropRect(probe.width, probe.height)
+            Pair(crop.width().toInt(), crop.height().toInt())
+        } else {
+            Pair(probe.width, probe.height)
+        }
+        val (encodeWidth, encodeHeight) = config.exportSettings.calculateOutputDimensions(baseW, baseH)
         probe.recycle()
 
-        Log.d(
-            TAG,
-            "Export rotation=$rotation storage=${orientation.storageWidth}x${orientation.storageHeight} " +
-                "encode=${encodeWidth}x$encodeHeight durationMs=$exportDurationMs"
-        )
-
-        val cacheFile = File(context.cacheDir, "plate_export_${System.currentTimeMillis()}.mp4")
-        val (audioFormat, audioSamples) = extractAudio(inputUri)
-
-        val muxer = MediaMuxer(cacheFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-
-        val videoEncoder = BitmapVideoEncoder(
-            width = encodeWidth,
-            height = encodeHeight,
-            frameRate = frameRate,
-            muxer = muxer
-        )
-
-        var frameIndex = 0
-        var blurredFrames = 0
-        var timeUs = 0L
-        var muxerStarted = false
-        var loggedSampleRect = false
-
-        while (timeUs <= exportDurationMs * 1000L && frameIndex < totalFrames) {
-            val timeMs = timeUs / 1000L
-            val rawFrame = retriever.getFrameAtTime(
-                timeUs,
-                MediaMetadataRetriever.OPTION_CLOSEST
-            )
-
-            if (rawFrame != null) {
-                val storageW = rawFrame.width
-                val storageH = rawFrame.height
-
-                val plateBox = PlateBitmapBlur.plateBoxAt(timeline, timeMs)
-                val plateRect = plateBox?.let { box ->
-                    val inStorage = VideoOrientation.scaleRectToFrame(
-                        rect = box.rect,
-                        fromWidth = box.frameWidth,
-                        fromHeight = box.frameHeight,
-                        toWidth = storageW,
-                        toHeight = storageH
-                    )
-                    VideoOrientation.mapRectToDisplay(
-                        rect = inStorage,
-                        sourceWidth = storageW,
-                        sourceHeight = storageH,
-                        rotationDegrees = rotation
-                    )
-                }
-
-                val frame = VideoOrientation.toDisplayBitmap(rawFrame, rotation)
-
-                if (!loggedSampleRect && plateRect != null) {
-                    loggedSampleRect = true
-                    Log.d(
-                        TAG,
-                        "Sample blur rect=$plateRect on ${frame.width}x${frame.height} at ${timeMs}ms " +
-                            "box=${plateBox?.rect} boxFrame=${plateBox?.frameWidth}x${plateBox?.frameHeight}"
-                    )
-                }
-
-                val toEncode = if (plateRect != null && isRectOnFrame(plateRect, frame.width, frame.height)) {
-                    blurredFrames++
-                    val blurred = PlateBitmapBlur.blurPlateRegion(frame, plateRect, blurStrength)
-                    PlateBitmapBlur.drawCoverOn(blurred, plateRect)
-                    blurred
-                } else {
-                    if (frameIndex < 5) {
-                        Log.d(
-                            TAG,
-                            "Skip blur at ${timeMs}ms box=${plateBox != null} rect=$plateRect"
-                        )
-                    }
-                    frame.copy(Bitmap.Config.ARGB_8888, true)
-                }
-
-                if (toEncode !== frame) {
-                    frame.recycle()
-                }
-
-                videoEncoder.encodeFrame(toEncode, timeUs)
-                toEncode.recycle()
-
-                if (!muxerStarted && videoEncoder.videoTrackIndex >= 0) {
-                    startMuxer(muxer, videoEncoder, audioFormat, audioSamples)
-                    muxerStarted = true
-                }
-
-                frameIndex++
-            }
-
-            onProgress((frameIndex.toFloat() / totalFrames).coerceIn(0f, 0.99f))
-            timeUs += frameStepUs
+        // Required dimension for retriever scaling taking rotation into account
+        val (extractW, extractH) = if (rotation == 90 || rotation == 270) {
+            encodeHeight to encodeWidth
+        } else {
+            encodeWidth to encodeHeight
         }
 
-        check(muxerStarted) { "Video encoder produced no output" }
-
-        videoEncoder.finish(endTimeUs = timeUs)
-        muxer.stop()
-        muxer.release()
-        retriever.release()
-
-        val outputUri = publishToGallery(cacheFile)
-        onProgress(1f)
+        FrameEffectProcessor.resetFaceCache()
 
         Log.d(
             TAG,
-            "Export done frames=$frameIndex blurred=$blurredFrames uri=$outputUri"
+            "Export startMs=$startMs endMs=$endMs speed=$speedFactor dim=${encodeWidth}x$encodeHeight " +
+                    "bitrate=${config.exportSettings.bitrate.bps} filter=${config.filter.title} mode=${config.blurMode.label}"
         )
 
-        ExportResult(
-            outputUri = outputUri,
-            frameCount = frameIndex,
-            blurredFrames = blurredFrames
-        )
-    }
+        val cacheFile = File(context.cacheDir, "blur_export_${System.currentTimeMillis()}.mp4")
+        var muxer: MediaMuxer? = null
+        var videoEncoder: BitmapVideoEncoder? = null
+        var isExportSuccessful = false
 
-    private fun isRectOnFrame(rect: RectF, frameW: Int, frameH: Int): Boolean {
-        val overlapW = (rect.right.coerceAtMost(frameW.toFloat()) -
-            rect.left.coerceAtLeast(0f)).coerceAtLeast(0f)
-        val overlapH = (rect.bottom.coerceAtMost(frameH.toFloat()) -
-            rect.top.coerceAtLeast(0f)).coerceAtLeast(0f)
-        return overlapW >= 8f && overlapH >= 8f
+        try {
+            val (audioFormat, audioSamples) = if (!config.isMuted && speedFactor == 1.0f) {
+                extractAudio(inputUri, startMs * 1000L, endMs * 1000L)
+            } else {
+                null to emptyList()
+            }
+
+            muxer = MediaMuxer(cacheFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+            videoEncoder = BitmapVideoEncoder(
+                width = encodeWidth,
+                height = encodeHeight,
+                frameRate = frameRate,
+                muxer = muxer,
+                bitRate = config.exportSettings.bitrate.bps
+            )
+
+            var frameIndex = 0
+            var processedFrames = 0
+            var sourceTimeUs = startMs * 1000L
+            var muxerStarted = false
+
+            while (sourceTimeUs <= endMs * 1000L && frameIndex < totalFrames) {
+                coroutineContext.ensureActive()
+
+                val timeMs = sourceTimeUs / 1000L
+                val rawFrame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.getScaledFrameAtTime(
+                        sourceTimeUs,
+                        MediaMetadataRetriever.OPTION_CLOSEST,
+                        extractW,
+                        extractH
+                    ) ?: retriever.getFrameAtTime(sourceTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                } else {
+                    retriever.getFrameAtTime(sourceTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                }
+
+                if (rawFrame != null) {
+                    val frame = VideoOrientation.toDisplayBitmap(rawFrame, rotation)
+
+                    // Process frame through full multi-tool effects pipeline
+                    val processedBitmap = FrameEffectProcessor.processFrame(
+                        source = frame,
+                        timeMs = timeMs,
+                        config = config,
+                        timeline = timeline
+                    )
+
+                    val scaledForEncoder = if (processedBitmap.width != encodeWidth || processedBitmap.height != encodeHeight) {
+                        Bitmap.createScaledBitmap(processedBitmap, encodeWidth, encodeHeight, true)
+                    } else {
+                        processedBitmap
+                    }
+
+                    val presentationTimeUs = (frameIndex * 1_000_000L / frameRate)
+                    videoEncoder.encodeFrame(scaledForEncoder, presentationTimeUs)
+
+                    if (scaledForEncoder !== processedBitmap) {
+                        scaledForEncoder.recycle()
+                    }
+                    if (processedBitmap !== frame) {
+                        processedBitmap.recycle()
+                    }
+                    frame.recycle()
+
+                    if (!muxerStarted && videoEncoder.videoTrackIndex >= 0) {
+                        startMuxer(muxer, videoEncoder, audioFormat, audioSamples)
+                        muxerStarted = true
+                    }
+
+                    frameIndex++
+                    processedFrames++
+                }
+
+                onProgress((frameIndex.toFloat() / totalFrames).coerceIn(0f, 0.99f))
+                sourceTimeUs += sourceStepUs
+            }
+
+            check(muxerStarted) { "Video encoder produced no output" }
+
+            val finalPtsUs = (frameIndex * 1_000_000L / frameRate)
+            videoEncoder.finish(endTimeUs = finalPtsUs)
+            try {
+                muxer.stop()
+            } catch (_: Throwable) {}
+            try {
+                muxer.release()
+            } catch (_: Throwable) {}
+            muxer = null
+
+            val outputUri = publishToGallery(cacheFile)
+            isExportSuccessful = true
+            onProgress(1f)
+
+            Log.d(TAG, "Export completed successfully! frames=$frameIndex output=$outputUri")
+
+            ExportResult(
+                outputUri = outputUri,
+                frameCount = frameIndex,
+                blurredFrames = processedFrames
+            )
+        } catch (ce: CancellationException) {
+            Log.d(TAG, "Export task cancelled by user, releasing resources")
+            throw ce
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Throwable) {}
+            try {
+                videoEncoder?.releaseSilently()
+            } catch (_: Throwable) {}
+            try {
+                muxer?.release()
+            } catch (_: Throwable) {}
+            if (!isExportSuccessful && cacheFile.exists()) {
+                cacheFile.delete()
+            }
+        }
     }
 
     private fun startMuxer(
@@ -198,7 +258,7 @@ class AutoPlateVideoExporter(
         audioFormat: MediaFormat?,
         audioSamples: List<AudioSample>
     ) {
-        if (audioFormat != null) {
+        if (audioFormat != null && audioSamples.isNotEmpty()) {
             val audioTrackIndex = muxer.addTrack(audioFormat)
             muxer.start()
             videoEncoder.startMuxerWriting()
@@ -219,9 +279,18 @@ class AutoPlateVideoExporter(
         }
     }
 
-    private fun extractAudio(inputUri: Uri): Pair<MediaFormat?, List<AudioSample>> {
+    private fun extractAudio(
+        inputUri: Uri,
+        startUs: Long = 0L,
+        endUs: Long = Long.MAX_VALUE
+    ): Pair<MediaFormat?, List<AudioSample>> {
         val extractor = MediaExtractor()
-        extractor.setDataSource(context, inputUri, null)
+        try {
+            extractor.setDataSource(context, inputUri, null)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not open audio data source", e)
+            return null to emptyList()
+        }
 
         var audioTrack = -1
         for (i in 0 until extractor.trackCount) {
@@ -243,19 +312,28 @@ class AutoPlateVideoExporter(
         val samples = mutableListOf<AudioSample>()
         val buffer = ByteBuffer.allocate(512 * 1024)
 
+        if (startUs > 0) {
+            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        }
+
         while (true) {
             val sampleSize = extractor.readSampleData(buffer, 0)
             if (sampleSize < 0) break
-            val sampleData = ByteBuffer.allocate(sampleSize)
-            buffer.position(0)
-            buffer.limit(sampleSize)
-            sampleData.put(buffer)
-            sampleData.flip()
-            samples += AudioSample(
-                data = sampleData,
-                presentationTimeUs = extractor.sampleTime,
-                flags = extractor.sampleFlags
-            )
+            val sampleTime = extractor.sampleTime
+            if (sampleTime > endUs) break
+
+            if (sampleTime >= startUs) {
+                val sampleData = ByteBuffer.allocate(sampleSize)
+                buffer.position(0)
+                buffer.limit(sampleSize)
+                sampleData.put(buffer)
+                sampleData.flip()
+                samples += AudioSample(
+                    data = sampleData,
+                    presentationTimeUs = max(0L, sampleTime - startUs),
+                    flags = extractor.sampleFlags
+                )
+            }
             buffer.clear()
             extractor.advance()
         }
@@ -266,7 +344,7 @@ class AutoPlateVideoExporter(
 
     private fun publishToGallery(cacheFile: File): Uri {
         val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, cacheFile.name)
+            put(MediaStore.Video.Media.DISPLAY_NAME, "AI_Blur_Edited_${System.currentTimeMillis()}.mp4")
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Video.Media.IS_PENDING, 1)
