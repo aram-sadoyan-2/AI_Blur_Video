@@ -20,6 +20,8 @@ data class VideoEditConfig(
     val trimEndMs: Long = 0L, // 0L means full video
     val aspectRatio: VideoAspectRatio = VideoAspectRatio.ORIGINAL,
     val customObjectNormalizedRect: RectF? = null, // Normalized 0..1 coordinates for custom object box
+    val customObjectRotationDegrees: Float = 0f,
+    val customObjectShape: CustomBlurShape = CustomBlurShape.ROUNDED_RECT,
     val isMuted: Boolean = false,
     val exportSettings: ExportSettings = ExportSettings()
 ) {
@@ -31,6 +33,7 @@ data class VideoEditConfig(
                 trimEndMs > 0L ||
                 aspectRatio != VideoAspectRatio.ORIGINAL ||
                 customObjectNormalizedRect != null ||
+                customObjectRotationDegrees != 0f ||
                 isMuted
     }
 }

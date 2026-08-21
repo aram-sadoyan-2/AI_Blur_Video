@@ -94,6 +94,79 @@ object FastStackBlur {
     }
 
     /**
+     * Blurs a rotated sub-region with optional shape masking (Rectangle, Rounded Rect, Oval).
+     */
+    fun blurRotatedRegion(
+        source: Bitmap,
+        rect: RectF,
+        rotationDegrees: Float,
+        shape: com.naiyados.aiblurvideo.ui.model.CustomBlurShape = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT,
+        strength: Float
+    ): Bitmap {
+        if (strength <= 0.01f || rect.width() < 4f || rect.height() < 4f) {
+            return source
+        }
+
+        val output = if (source.isMutable) source else source.copy(Bitmap.Config.ARGB_8888, true)
+        val cx = rect.centerX()
+        val cy = rect.centerY()
+        val halfW = rect.width() / 2f
+        val halfH = rect.height() / 2f
+
+        val radius = kotlin.math.sqrt(halfW * halfW + halfH * halfH)
+        val boundLeft = (cx - radius).coerceAtLeast(0f)
+        val boundTop = (cy - radius).coerceAtLeast(0f)
+        val boundRight = (cx + radius).coerceAtMost(output.width.toFloat())
+        val boundBottom = (cy + radius).coerceAtMost(output.height.toFloat())
+
+        if (boundRight <= boundLeft + 2f || boundBottom <= boundTop + 2f) {
+            return output
+        }
+
+        val cropW = (boundRight - boundLeft).roundToInt()
+        val cropH = (boundBottom - boundTop).roundToInt()
+        if (cropW < 4 || cropH < 4) {
+            return output
+        }
+
+        val crop = Bitmap.createBitmap(output, boundLeft.roundToInt(), boundTop.roundToInt(), cropW, cropH)
+        val blurredCrop = blur(crop, strength)
+
+        val canvas = Canvas(output)
+        canvas.save()
+
+        val path = android.graphics.Path()
+        val matrix = android.graphics.Matrix()
+        matrix.setRotate(rotationDegrees, cx, cy)
+
+        when (shape) {
+            com.naiyados.aiblurvideo.ui.model.CustomBlurShape.RECTANGLE -> {
+                path.addRect(rect, android.graphics.Path.Direction.CW)
+            }
+            com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT -> {
+                val corner = min(rect.width(), rect.height()) * 0.20f
+                path.addRoundRect(rect, corner, corner, android.graphics.Path.Direction.CW)
+            }
+            com.naiyados.aiblurvideo.ui.model.CustomBlurShape.OVAL -> {
+                path.addOval(rect, android.graphics.Path.Direction.CW)
+            }
+        }
+        path.transform(matrix)
+
+        canvas.clipPath(path)
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        canvas.drawBitmap(blurredCrop, boundLeft, boundTop, paint)
+        canvas.restore()
+
+        if (blurredCrop != crop) {
+            blurredCrop.recycle()
+        }
+        crop.recycle()
+
+        return output
+    }
+
+    /**
      * In-place StackBlur on a mutable Bitmap.
      * Implementation of Mario Klingemann's StackBlur algorithm in pure Kotlin.
      */

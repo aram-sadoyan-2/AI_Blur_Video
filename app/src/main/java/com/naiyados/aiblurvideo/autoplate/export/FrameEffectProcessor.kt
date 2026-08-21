@@ -38,7 +38,30 @@ object FrameEffectProcessor {
     ): Bitmap {
         var current = source
 
-        // 1. Apply Blur / Mask Effects based on BlurMode
+        // 1. Apply Aspect Ratio Crop first so frame coordinates match the user preview
+        if (config.aspectRatio != VideoAspectRatio.ORIGINAL) {
+            val cropRect = config.aspectRatio.calculateCropRect(current.width, current.height)
+            val left = cropRect.left.roundToInt().coerceIn(0, current.width - 2)
+            val top = cropRect.top.roundToInt().coerceIn(0, current.height - 2)
+            val width = (cropRect.width().roundToInt() / 2) * 2
+            val height = (cropRect.height().roundToInt() / 2) * 2
+
+            if (width > 8 && height > 8 && (width < current.width || height < current.height)) {
+                val cropped = Bitmap.createBitmap(
+                    current,
+                    left,
+                    top,
+                    width.coerceAtMost(current.width - left),
+                    height.coerceAtMost(current.height - top)
+                )
+                if (current != source && current != cropped) {
+                    current.recycle()
+                }
+                current = cropped
+            }
+        }
+
+        // 2. Apply Blur / Mask Effects based on BlurMode directly on the framed video
         when (config.blurMode) {
             BlurMode.AutoPlate -> {
                 val includePlates = config.isPlateBlurActive
@@ -102,7 +125,13 @@ object FrameEffectProcessor {
                         normRect.right * current.width,
                         normRect.bottom * current.height
                     )
-                    val processed = PlateBitmapBlur.blurPlateRegion(current, absoluteRect, config.blurStrength)
+                    val processed = FastStackBlur.blurRotatedRegion(
+                        source = current,
+                        rect = absoluteRect,
+                        rotationDegrees = config.customObjectRotationDegrees,
+                        shape = config.customObjectShape,
+                        strength = config.blurStrength
+                    )
                     if (processed != current && current != source) {
                         current.recycle()
                     }
@@ -125,36 +154,13 @@ object FrameEffectProcessor {
             }
         }
 
-        // 2. Apply Color Filter / Cinematic FX
+        // 3. Apply Color Filter / Cinematic FX
         if (config.filter != VideoFilter.NONE) {
             val filtered = config.filter.applyToBitmap(current, config.filterIntensity)
             if (current != source && current != filtered) {
                 current.recycle()
             }
             current = filtered
-        }
-
-        // 3. Apply Aspect Ratio Crop
-        if (config.aspectRatio != VideoAspectRatio.ORIGINAL) {
-            val cropRect = config.aspectRatio.calculateCropRect(current.width, current.height)
-            val left = cropRect.left.roundToInt().coerceIn(0, current.width - 2)
-            val top = cropRect.top.roundToInt().coerceIn(0, current.height - 2)
-            val width = (cropRect.width().roundToInt() / 2) * 2
-            val height = (cropRect.height().roundToInt() / 2) * 2
-
-            if (width > 8 && height > 8 && (width < current.width || height < current.height)) {
-                val cropped = Bitmap.createBitmap(
-                    current,
-                    left,
-                    top,
-                    width.coerceAtMost(current.width - left),
-                    height.coerceAtMost(current.height - top)
-                )
-                if (current != source && current != cropped) {
-                    current.recycle()
-                }
-                current = cropped
-            }
         }
 
         return current

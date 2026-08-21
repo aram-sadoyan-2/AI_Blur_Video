@@ -99,6 +99,64 @@ class VideoEditingFeaturesTest {
     }
 
     @Test
+    fun testCustomBlurShapesAndConfig() {
+        val shapes = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.values()
+        assertEquals(3, shapes.size)
+        assertTrue(shapes.contains(com.naiyados.aiblurvideo.ui.model.CustomBlurShape.RECTANGLE))
+        assertTrue(shapes.contains(com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT))
+        assertTrue(shapes.contains(com.naiyados.aiblurvideo.ui.model.CustomBlurShape.OVAL))
+
+        val config = VideoEditConfig(
+            blurMode = BlurMode.Object,
+            customObjectNormalizedRect = android.graphics.RectF(0.2f, 0.2f, 0.8f, 0.8f),
+            customObjectRotationDegrees = 45f,
+            customObjectShape = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.OVAL
+        )
+        assertTrue(config.hasActiveEdits())
+        assertEquals(45f, config.customObjectRotationDegrees, 0.001f)
+        assertEquals(com.naiyados.aiblurvideo.ui.model.CustomBlurShape.OVAL, config.customObjectShape)
+    }
+
+    @Test
+    fun testCustomBlurTransformAndCoordinateMapping() {
+        val normLeft = 0.1f
+        val normTop = 0.2f
+        val normRight = 0.9f
+        val normBottom = 0.8f
+        val frameWidth = 1920
+        val frameHeight = 1080
+
+        val mappedLeft = normLeft * frameWidth
+        val mappedTop = normTop * frameHeight
+        val mappedRight = normRight * frameWidth
+        val mappedBottom = normBottom * frameHeight
+
+        assertEquals(192f, mappedLeft, 0.01f)
+        assertEquals(216f, mappedTop, 0.01f)
+        assertEquals(1728f, mappedRight, 0.01f)
+        assertEquals(864f, mappedBottom, 0.01f)
+
+        // Verify rotation normalization
+        var angle = 370f % 360f
+        if (angle < 0f) angle += 360f
+        assertEquals(10f, angle, 0.01f)
+
+        var negativeAngle = (-45f) % 360f
+        if (negativeAngle < 0f) negativeAngle += 360f
+        assertEquals(315f, negativeAngle, 0.01f)
+
+        val config = VideoEditConfig(
+            blurMode = BlurMode.Object,
+            customObjectRotationDegrees = 315f,
+            customObjectShape = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT,
+            blurStrength = 0.85f
+        )
+        assertTrue(config.hasActiveEdits())
+        assertEquals(315f, config.customObjectRotationDegrees, 0.01f)
+        assertEquals(0.85f, config.blurStrength, 0.01f)
+    }
+
+    @Test
     fun testThemeManagerToggleLogic() {
         ThemeManager.setThemeMode(com.naiyados.aiblurvideo.ui.theme.AppThemeMode.DARK)
         assertEquals(com.naiyados.aiblurvideo.ui.theme.AppThemeMode.DARK, ThemeManager.themeMode.value)

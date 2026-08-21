@@ -114,6 +114,7 @@ import com.naiyados.aiblurvideo.ui.components.VideoFrameStripSection
 import com.naiyados.aiblurvideo.ui.components.VideoPreviewPanel
 import com.naiyados.aiblurvideo.ui.components.VideoTrimmerControl
 import com.naiyados.aiblurvideo.ui.model.BlurMode
+import com.naiyados.aiblurvideo.ui.model.CustomBlurShape
 import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
 import com.naiyados.aiblurvideo.ui.model.VideoEditConfig
 import com.naiyados.aiblurvideo.ui.model.VideoFilter
@@ -125,6 +126,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -174,6 +176,14 @@ fun BlurMode(
 
     var customObjectRect by remember {
         mutableStateOf<RectF?>(RectF(0.25f, 0.30f, 0.75f, 0.70f))
+    }
+
+    var customObjectRotation by remember {
+        mutableFloatStateOf(0f)
+    }
+
+    var customObjectShape by remember {
+        mutableStateOf(CustomBlurShape.ROUNDED_RECT)
     }
 
     var pixelateBlockSize by remember {
@@ -539,6 +549,8 @@ fun BlurMode(
                         trimEndMs = trimEndMs,
                         aspectRatio = selectedAspectRatio,
                         customObjectNormalizedRect = customObjectRect,
+                        customObjectRotationDegrees = customObjectRotation,
+                        customObjectShape = customObjectShape,
                         isMuted = isMuted,
                         exportSettings = settingsToUse
                     )
@@ -646,8 +658,13 @@ fun BlurMode(
                 pixelateBlockSize = pixelateBlockSize,
                 aspectRatio = selectedAspectRatio,
                 customObjectNormalizedRect = customObjectRect,
+                customObjectRotationDegrees = customObjectRotation,
+                customObjectShape = customObjectShape,
                 onCustomObjectRectChange = { updated ->
                     customObjectRect = updated
+                },
+                onCustomObjectRotationChange = { updatedAngle ->
+                    customObjectRotation = updatedAngle
                 }
             )
 
@@ -988,16 +1005,157 @@ fun BlurMode(
 
                     BlurMode.Object -> {
                         Column(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             BlurStrengthSlider(
                                 modifier = Modifier.fillMaxWidth(),
                                 value = blurStrength,
-                                label = "Object Blur",
+                                label = "Custom Blur Strength",
                                 testTag = "object_blur_strength_slider",
                                 onValueChange = { blurStrength = it }
                             )
+
+                            // Shape selector & Quick actions row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CustomBlurShape.values().forEach { shapeItem ->
+                                        val isSelected = customObjectShape == shapeItem
+                                        Surface(
+                                            modifier = Modifier
+                                                .clickable { customObjectShape = shapeItem }
+                                                .testTag("shape_btn_${shapeItem.name}"),
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isSelected) AiBlurColors.Green else AiBlurColors.SurfaceVariant,
+                                            border = if (isSelected) null else BorderStroke(1.dp, AiBlurColors.Border)
+                                        ) {
+                                            Text(
+                                                text = shapeItem.label,
+                                                color = if (isSelected) Color.Black else Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .clickable {
+                                                customObjectRect = RectF(0.25f, 0.25f, 0.75f, 0.75f)
+                                                customObjectRotation = 0f
+                                            }
+                                            .testTag("custom_blur_reset_btn"),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = AiBlurColors.SurfaceVariant,
+                                        border = BorderStroke(1.dp, AiBlurColors.Border)
+                                    ) {
+                                        Text(
+                                            text = "Center",
+                                            color = AiBlurColors.Green,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                        )
+                                    }
+
+                                    Surface(
+                                        modifier = Modifier
+                                            .clickable {
+                                                val curr = customObjectRect ?: RectF(0.25f, 0.30f, 0.75f, 0.70f)
+                                                val cx = curr.centerX()
+                                                val cy = curr.centerY()
+                                                val size = minOf(curr.width(), curr.height()).coerceIn(0.15f, 0.8f)
+                                                val left = (cx - size / 2f).coerceIn(0f, 1f - size)
+                                                val top = (cy - size / 2f).coerceIn(0f, 1f - size)
+                                                customObjectRect = RectF(left, top, left + size, top + size)
+                                            }
+                                            .testTag("custom_blur_square_btn"),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = AiBlurColors.SurfaceVariant,
+                                        border = BorderStroke(1.dp, AiBlurColors.Border)
+                                    ) {
+                                        Text(
+                                            text = "1:1 Square",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Rotation slider & Angle snaps
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Rotation Angle",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "${customObjectRotation.roundToInt()}°",
+                                        color = AiBlurColors.Green,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Slider(
+                                    value = customObjectRotation,
+                                    onValueChange = { customObjectRotation = it },
+                                    valueRange = 0f..360f,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = AiBlurColors.Green,
+                                        activeTrackColor = AiBlurColors.Green,
+                                        inactiveTrackColor = AiBlurColors.SurfaceVariant
+                                    )
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    listOf(0f, 45f, 90f, 180f, 270f).forEach { angle ->
+                                        Surface(
+                                            modifier = Modifier.clickable { customObjectRotation = angle },
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (customObjectRotation.roundToInt() == angle.roundToInt()) AiBlurColors.Green.copy(alpha = 0.25f) else Color.Transparent,
+                                            border = BorderStroke(1.dp, if (customObjectRotation.roundToInt() == angle.roundToInt()) AiBlurColors.Green else AiBlurColors.Border)
+                                        ) {
+                                            Text(
+                                                text = if (angle == 0f) "0° Reset" else "${angle.toInt()}°",
+                                                color = if (customObjectRotation.roundToInt() == angle.roundToInt()) AiBlurColors.Green else Color.LightGray,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 

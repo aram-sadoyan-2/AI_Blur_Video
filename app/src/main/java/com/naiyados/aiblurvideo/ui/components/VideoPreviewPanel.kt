@@ -76,7 +76,10 @@ fun VideoPreviewPanel(
     pixelateBlockSize: Int = 24,
     aspectRatio: VideoAspectRatio = VideoAspectRatio.ORIGINAL,
     customObjectNormalizedRect: RectF? = null,
-    onCustomObjectRectChange: (RectF) -> Unit = {}
+    customObjectRotationDegrees: Float = 0f,
+    customObjectShape: com.naiyados.aiblurvideo.ui.model.CustomBlurShape = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT,
+    onCustomObjectRectChange: (RectF) -> Unit = {},
+    onCustomObjectRotationChange: (Float) -> Unit = {}
 ) {
     val blurRadiusPx = when (selectedMode) {
         BlurMode.FullBlur -> if (blurStrength > 0.02f) (blurStrength * 90f).coerceIn(4f, 180f) else 0f
@@ -185,7 +188,11 @@ fun VideoPreviewPanel(
                 if (selectedMode == BlurMode.Object) {
                     CustomObjectTouchOverlay(
                         normalizedRect = customObjectNormalizedRect,
+                        rotationDegrees = customObjectRotationDegrees,
+                        shape = customObjectShape,
+                        blurStrength = blurStrength,
                         onRectChanged = onCustomObjectRectChange,
+                        onRotationChanged = onCustomObjectRotationChange,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
