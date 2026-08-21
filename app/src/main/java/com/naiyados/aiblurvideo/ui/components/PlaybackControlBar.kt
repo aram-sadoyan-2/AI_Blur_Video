@@ -40,6 +40,8 @@ fun PlaybackControlBar(
     onPlayPauseClick: () -> Unit,
     onToggleMute: () -> Unit,
     modifier: Modifier = Modifier,
+    canUndo: Boolean = true,
+    canRedo: Boolean = true,
     onUndoClick: () -> Unit = {},
     onRedoClick: () -> Unit = {}
 ) {
@@ -93,24 +95,26 @@ fun PlaybackControlBar(
         ) {
             IconButton(
                 onClick = onUndoClick,
+                enabled = canUndo,
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Undo,
                     contentDescription = "Undo",
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = if (canUndo) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.3f),
                     modifier = Modifier.size(19.dp)
                 )
             }
 
             IconButton(
                 onClick = onRedoClick,
+                enabled = canRedo,
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Redo,
                     contentDescription = "Redo",
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = if (canRedo) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.3f),
                     modifier = Modifier.size(19.dp)
                 )
             }
@@ -122,7 +126,7 @@ fun PlaybackControlBar(
                 Icon(
                     imageVector = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
                     contentDescription = if (isMuted) "Unmute" else "Mute",
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = if (isMuted) Color(0xFFFF5252) else Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(19.dp)
                 )
             }

@@ -70,6 +70,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -279,6 +280,77 @@ fun BlurMode(
         mutableStateOf(ExportSettings())
     }
 
+    // Undo & Redo History State
+    val undoStack = remember { mutableStateListOf<VideoEditConfig>() }
+    val redoStack = remember { mutableStateListOf<VideoEditConfig>() }
+
+    fun captureConfigSnapshot(): VideoEditConfig {
+        return VideoEditConfig(
+            blurMode = selectedMode,
+            blurStrength = blurStrength,
+            isPlateBlurActive = isPlateBlurEnabled,
+            filter = selectedFilter,
+            filterIntensity = filterIntensity,
+            pixelateBlockSize = pixelateBlockSize,
+            playbackSpeed = playbackSpeed,
+            trimStartMs = trimStartMs,
+            trimEndMs = trimEndMs,
+            aspectRatio = selectedAspectRatio,
+            customObjectNormalizedRect = customObjectRect,
+            isMuted = isMuted,
+            exportSettings = exportSettings
+        )
+    }
+
+    fun applyConfig(config: VideoEditConfig) {
+        selectedMode = config.blurMode
+        blurStrength = config.blurStrength
+        isPlateBlurEnabled = config.isPlateBlurActive
+        selectedFilter = config.filter
+        filterIntensity = config.filterIntensity
+        pixelateBlockSize = config.pixelateBlockSize
+        playbackSpeed = config.playbackSpeed
+        trimStartMs = config.trimStartMs
+        trimEndMs = config.trimEndMs
+        selectedAspectRatio = config.aspectRatio
+        customObjectRect = config.customObjectNormalizedRect
+        isMuted = config.isMuted
+        exportSettings = config.exportSettings
+    }
+
+    val onUndo: () -> Unit = {
+        if (undoStack.isNotEmpty()) {
+            val current = captureConfigSnapshot()
+            val previous = undoStack.removeAt(undoStack.size - 1)
+            redoStack.add(current)
+            applyConfig(previous)
+            Toast.makeText(context, "↩ Undone", Toast.LENGTH_SHORT).show()
+        } else {
+            // If stack is empty, reset to initial default state and allow redoing back
+            val current = captureConfigSnapshot()
+            if (current.hasActiveEdits() || current.blurStrength != 0.65f) {
+                redoStack.add(current)
+                selectedMode = BlurMode.AutoPlate
+                blurStrength = 0.65f
+                selectedFilter = VideoFilter.NONE
+                playbackSpeed = 1.0f
+                selectedAspectRatio = VideoAspectRatio.ORIGINAL
+                customObjectRect = RectF(0.25f, 0.30f, 0.75f, 0.70f)
+                Toast.makeText(context, "↩ Reset edits", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val onRedo: () -> Unit = {
+        if (redoStack.isNotEmpty()) {
+            val current = captureConfigSnapshot()
+            val next = redoStack.removeAt(redoStack.size - 1)
+            undoStack.add(current)
+            applyConfig(next)
+            Toast.makeText(context, "↪ Redone", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     var livePlateBox by remember {
         mutableStateOf<AutoPlateBox?>(null)
     }
@@ -408,6 +480,67 @@ fun BlurMode(
 
     val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
+    val performExport: (ExportSettings) -> Unit = { settingsToUse ->
+        if (!isExporting && videoUri != null) {
+            isPlaying = false
+            player.pause()
+
+            exportJob = scope.launch {
+                isExporting = true
+                exportProgress = 0f
+                try {
+                    val duration = maxOf(
+                        videoTotalDurationMs,
+                        autoPlateVideoDurationMs,
+                        player.duration
+                    )
+
+                    val editConfig = VideoEditConfig(
+                        blurMode = selectedMode,
+                        blurStrength = blurStrength,
+                        isPlateBlurActive = isPlateBlurEnabled,
+                        filter = selectedFilter,
+                        filterIntensity = filterIntensity,
+                        pixelateBlockSize = pixelateBlockSize,
+                        playbackSpeed = playbackSpeed,
+                        trimStartMs = trimStartMs,
+                        trimEndMs = trimEndMs,
+                        aspectRatio = selectedAspectRatio,
+                        customObjectNormalizedRect = customObjectRect,
+                        isMuted = isMuted,
+                        exportSettings = settingsToUse
+                    )
+
+                    val exporter = AutoPlateVideoExporter(context)
+                    val result = exporter.exportWithConfig(
+                        inputUri = videoUri,
+                        config = editConfig,
+                        timeline = if (selectedMode == BlurMode.AutoPlate) timeline else null,
+                        durationMs = duration,
+                        onProgress = { exportProgress = it }
+                    )
+
+                    Log.d("VideoEditor", "Export successful! frames=${result.frameCount} blurred=${result.blurredFrames} uri=${result.outputUri}")
+                    Toast.makeText(
+                        context,
+                        "✨ Video successfully exported & saved to Gallery! (${result.frameCount} frames)",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    onSaveClick()
+                } catch (ce: CancellationException) {
+                    Log.d("VideoEditor", "Export cancelled by user")
+                    Toast.makeText(context, "Export cancelled — resources freed", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.e("VideoEditor", "Export failed", e)
+                    Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                } finally {
+                    isExporting = false
+                    exportJob = null
+                }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -434,63 +567,9 @@ fun BlurMode(
             },
             onSaveClick = {
                 if (isExporting || videoUri == null) return@EditorHeaderBar
-
                 isPlaying = false
                 player.pause()
-
-                exportJob = scope.launch {
-                    isExporting = true
-                    exportProgress = 0f
-                    try {
-                        val duration = maxOf(
-                            videoTotalDurationMs,
-                            autoPlateVideoDurationMs,
-                            player.duration
-                        )
-
-                        val editConfig = VideoEditConfig(
-                            blurMode = selectedMode,
-                            blurStrength = blurStrength,
-                            isPlateBlurActive = isPlateBlurEnabled,
-                            filter = selectedFilter,
-                            filterIntensity = filterIntensity,
-                            pixelateBlockSize = pixelateBlockSize,
-                            playbackSpeed = playbackSpeed,
-                            trimStartMs = trimStartMs,
-                            trimEndMs = trimEndMs,
-                            aspectRatio = selectedAspectRatio,
-                            customObjectNormalizedRect = customObjectRect,
-                            isMuted = isMuted,
-                            exportSettings = exportSettings
-                        )
-
-                        val exporter = AutoPlateVideoExporter(context)
-                        val result = exporter.exportWithConfig(
-                            inputUri = videoUri,
-                            config = editConfig,
-                            timeline = if (selectedMode == BlurMode.AutoPlate) timeline else null,
-                            durationMs = duration,
-                            onProgress = { exportProgress = it }
-                        )
-
-                        Log.d("VideoEditor", "Export successful! frames=${result.frameCount} blurred=${result.blurredFrames} uri=${result.outputUri}")
-                        Toast.makeText(
-                            context,
-                            "✨ Video successfully exported & saved to Gallery! (${result.frameCount} frames)",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        onSaveClick()
-                    } catch (ce: CancellationException) {
-                        Log.d("VideoEditor", "Export cancelled by user")
-                        Toast.makeText(context, "Export cancelled — resources freed", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        Log.e("VideoEditor", "Export failed", e)
-                        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
-                    } finally {
-                        isExporting = false
-                        exportJob = null
-                    }
-                }
+                showExportSettingsDialog = true
             }
         )
 
@@ -685,6 +764,10 @@ fun BlurMode(
             player = player,
             isPlaying = isPlaying,
             isMuted = isMuted,
+            canUndo = undoStack.isNotEmpty() || captureConfigSnapshot().hasActiveEdits() || blurStrength != 0.65f,
+            canRedo = redoStack.isNotEmpty(),
+            onUndoClick = onUndo,
+            onRedoClick = onRedo,
             onPlayPauseClick = {
                 isPlaying = !isPlaying
             },
@@ -1009,19 +1092,22 @@ fun BlurMode(
     }
 
     if (showExportSettingsDialog) {
+        val duration = maxOf(
+            videoTotalDurationMs,
+            autoPlateVideoDurationMs,
+            player.duration
+        )
         ExportSettingsDialog(
             initialSettings = exportSettings,
+            videoDurationMs = if (duration > 0L) duration else 10_000L,
+            isPreExportFlow = true,
             onDismissRequest = {
                 showExportSettingsDialog = false
             },
-            onSaveSettings = { updated ->
+            onConfirmExport = { updated ->
                 exportSettings = updated
                 showExportSettingsDialog = false
-                Toast.makeText(
-                    context,
-                    "Export set to ${updated.resolution.label} at ${updated.bitrate.label}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                performExport(updated)
             }
         )
     }

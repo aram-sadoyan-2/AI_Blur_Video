@@ -425,8 +425,9 @@ fun BatchQueueScreen(
     if (showSettingsDialog) {
         ExportSettingsDialog(
             initialSettings = exportSettings,
+            isPreExportFlow = false,
             onDismissRequest = { showSettingsDialog = false },
-            onSaveSettings = { updated ->
+            onConfirmExport = { updated ->
                 BatchQueueManager.updateExportSettings(updated)
                 showSettingsDialog = false
                 Toast.makeText(

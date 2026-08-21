@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VideoFile
@@ -190,40 +188,6 @@ fun VideoPreviewPanel(
                         onRectChanged = onCustomObjectRectChange,
                         modifier = Modifier.fillMaxSize()
                     )
-                }
-            }
-
-            if (selectedMode != BlurMode.AutoPlate) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp),
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.Black.copy(alpha = 0.65f),
-                    border = BorderStroke(
-                        width = 0.8.dp,
-                        color = Color.White.copy(alpha = 0.18f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (selectedMode == BlurMode.FullBlur) Icons.Rounded.BlurOn else Icons.Rounded.AutoAwesome,
-                            contentDescription = null,
-                            tint = if (selectedMode == BlurMode.FullBlur) AiBlurColors.Pink else AiBlurColors.Orange,
-                            modifier = Modifier.size(13.dp)
-                        )
-
-                        Text(
-                            text = selectedMode.label + if (selectedMode == BlurMode.FullBlur) " (${(blurStrength * 100).toInt()}%)" else if (selectedFilter != VideoFilter.NONE) " • ${selectedFilter.title}" else "",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.5.sp
-                        )
-                    }
                 }
             }
         }
