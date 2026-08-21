@@ -160,17 +160,12 @@ object FrameEffectProcessor {
     }
 
     fun fastBlur(source: Bitmap, blurStrength: Float): Bitmap {
-        val factor = max(4, (blurStrength * 24).roundToInt())
-        val smallW = max(2, source.width / factor)
-        val smallH = max(2, source.height / factor)
+        val factor = max(6, (blurStrength * 48).roundToInt())
+        val smallW = max(3, source.width / factor)
+        val smallH = max(3, source.height / factor)
         val small = Bitmap.createScaledBitmap(source, smallW, smallH, true)
-        // Multi-stage down-up sampling produces silky smooth Gaussian-like blur
-        val midW = max(2, smallW * 2)
-        val midH = max(2, smallH * 2)
-        val mid = Bitmap.createScaledBitmap(small, midW, midH, true)
+        val result = Bitmap.createScaledBitmap(small, source.width, source.height, true)
         small.recycle()
-        val result = Bitmap.createScaledBitmap(mid, source.width, source.height, true)
-        mid.recycle()
         return result
     }
 

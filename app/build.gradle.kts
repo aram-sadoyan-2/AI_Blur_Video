@@ -57,6 +57,9 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 
     androidResources {
         noCompress += "tflite"
@@ -96,6 +99,8 @@ dependencies {
 
     // YOLOv8 plate_detector.tflite — standard TFLite ops only (no flex / select-tf-ops).
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
 
     // implementation("androidx.media3:media3-ui:1.10.0")
 }

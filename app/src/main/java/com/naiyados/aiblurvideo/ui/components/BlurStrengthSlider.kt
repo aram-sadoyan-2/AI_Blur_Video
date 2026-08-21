@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,6 +31,8 @@ import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
 fun BlurStrengthSlider(
     modifier: Modifier = Modifier,
     value: Float,
+    label: String = "Plate Blur",
+    testTag: String = "blur_strength_slider",
     onValueChange: (Float) -> Unit
 ) {
     Surface(
@@ -56,7 +59,7 @@ fun BlurStrengthSlider(
             )
 
             Text(
-                text = "Blur",
+                text = label,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
@@ -65,7 +68,8 @@ fun BlurStrengthSlider(
             Slider(
                 modifier = Modifier
                     .weight(1f)
-                    .height(26.dp),
+                    .height(26.dp)
+                    .testTag(testTag),
                 value = value,
                 onValueChange = onValueChange,
                 valueRange = 0f..1f,
@@ -81,7 +85,7 @@ fun BlurStrengthSlider(
                 color = Color.White.copy(alpha = 0.85f),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp,
-                modifier = Modifier.width(32.dp)
+                modifier = Modifier.width(36.dp)
             )
         }
     }

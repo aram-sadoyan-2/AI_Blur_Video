@@ -81,9 +81,7 @@ fun VideoPreviewPanel(
     onCustomObjectRectChange: (RectF) -> Unit = {}
 ) {
     val blurRadiusPx = when (selectedMode) {
-        BlurMode.FullBlur -> blurStrength.coerceIn(0f, 1f) * 55f
-        BlurMode.Background -> blurStrength.coerceIn(0f, 1f) * 35f
-        BlurMode.Pixelate -> blurStrength.coerceIn(0f, 1f) * 40f
+        BlurMode.FullBlur -> if (blurStrength > 0.02f) (blurStrength * 90f).coerceIn(4f, 180f) else 0f
         else -> 0f
     }
 
@@ -125,6 +123,14 @@ fun VideoPreviewPanel(
                             clip = true
 
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val blurEffect = if (blurRadiusPx > 0.5f) {
+                                    AndroidRenderEffect.createBlurEffect(
+                                        blurRadiusPx,
+                                        blurRadiusPx,
+                                        Shader.TileMode.CLAMP
+                                    )
+                                } else null
+
                                 val colorFilterEffect = if (selectedFilter != VideoFilter.NONE) {
                                     val cm = selectedFilter.createColorMatrix(filterIntensity)
                                     AndroidRenderEffect.createColorFilterEffect(
@@ -132,11 +138,24 @@ fun VideoPreviewPanel(
                                     )
                                 } else null
 
-                                renderEffect = colorFilterEffect?.asComposeRenderEffect()
+                                renderEffect = when {
+                                    blurEffect != null && colorFilterEffect != null -> {
+                                        AndroidRenderEffect.createChainEffect(blurEffect, colorFilterEffect)
+                                            .asComposeRenderEffect()
+                                    }
+                                    blurEffect != null -> blurEffect.asComposeRenderEffect()
+                                    colorFilterEffect != null -> colorFilterEffect.asComposeRenderEffect()
+                                    else -> null
+                                }
                             }
                         }
                 ) {
-                    PlayerTextureViewFit(player = player)
+                    PlayerTextureViewFit(
+                        player = player,
+                        blurRadiusPx = blurRadiusPx,
+                        selectedFilter = selectedFilter,
+                        filterIntensity = filterIntensity
+                    )
 
                     if (effectiveScrubBitmap != null) {
                         Image(
@@ -146,14 +165,6 @@ fun VideoPreviewPanel(
                             contentScale = ContentScale.Fit
                         )
                     }
-                }
-
-                // Real-time Full Blur Glass Overlay
-                if (selectedMode == BlurMode.FullBlur && blurStrength > 0.02f) {
-                    FullBlurLiveOverlay(
-                        blurStrength = blurStrength,
-                        modifier = Modifier.fillMaxSize()
-                    )
                 }
 
                 // Real-time Bokeh Background Blur Overlay
@@ -220,57 +231,6 @@ fun VideoPreviewPanel(
 }
 
 @Composable
-fun FullBlurLiveOverlay(
-    blurStrength: Float,
-    modifier: Modifier = Modifier
-) {
-    val clamped = blurStrength.coerceIn(0.05f, 1f)
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clipToBounds()
-    ) {
-        // Multi-level frosted diffusion veil
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // Layer 1: Base frost diffusion
-            drawRect(
-                color = Color(0x40101420).copy(alpha = 0.25f + clamped * 0.45f)
-            )
-
-            // Layer 2: Vignette / depth scatter
-            drawRect(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0x30FFFFFF).copy(alpha = clamped * 0.20f),
-                        Color(0x80050812).copy(alpha = 0.35f + clamped * 0.50f)
-                    ),
-                    center = Offset(size.width / 2f, size.height / 2f),
-                    radius = maxOf(size.width, size.height) * 0.7f
-                )
-            )
-        }
-
-        // Frosted glass refraction layer
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val radiusPx = clamped * 50f
-                        renderEffect = AndroidRenderEffect.createBlurEffect(
-                            radiusPx,
-                            radiusPx,
-                            Shader.TileMode.CLAMP
-                        ).asComposeRenderEffect()
-                    }
-                    alpha = 0.6f + (clamped * 0.4f)
-                }
-                .background(Color.White.copy(alpha = 0.08f + clamped * 0.12f))
-        )
-    }
-}
-
-@Composable
 fun BackgroundBlurLiveOverlay(
     blurStrength: Float,
     modifier: Modifier = Modifier
@@ -329,7 +289,10 @@ fun PixelateLiveOverlay(
 
 @Composable
 fun PlayerTextureViewFit(
-    player: Player
+    player: Player,
+    blurRadiusPx: Float = 0f,
+    selectedFilter: VideoFilter = VideoFilter.NONE,
+    filterIntensity: Float = 1.0f
 ) {
     var textureViewRef by remember {
         mutableStateOf<TextureView?>(null)
@@ -367,6 +330,35 @@ fun PlayerTextureViewFit(
                     videoWidth = player.videoSize.width,
                     videoHeight = player.videoSize.height
                 )
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val blurEffect = if (blurRadiusPx > 0.5f) {
+                        android.graphics.RenderEffect.createBlurEffect(
+                            blurRadiusPx,
+                            blurRadiusPx,
+                            Shader.TileMode.CLAMP
+                        )
+                    } else null
+
+                    val colorFilterEffect = if (selectedFilter != VideoFilter.NONE) {
+                        val cm = selectedFilter.createColorMatrix(filterIntensity)
+                        android.graphics.RenderEffect.createColorFilterEffect(
+                            ColorMatrixColorFilter(cm)
+                        )
+                    } else null
+
+                    val combinedEffect = when {
+                        blurEffect != null && colorFilterEffect != null -> {
+                            android.graphics.RenderEffect.createChainEffect(blurEffect, colorFilterEffect)
+                        }
+                        blurEffect != null -> blurEffect
+                        colorFilterEffect != null -> colorFilterEffect
+                        else -> null
+                    }
+
+                    texture.setRenderEffect(combinedEffect)
+                    container.setRenderEffect(combinedEffect)
+                }
             }
         }
     )

@@ -6,6 +6,8 @@ import android.graphics.RectF
 import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
+import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.nnapi.NnApiDelegate
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -268,6 +270,32 @@ class TflitePlateDetector(
         private fun createInterpreter(model: MappedByteBuffer): Pair<Interpreter, List<AutoCloseable>> {
             var lastError: Exception? = null
 
+            // 1. Try Hardware GPU Delegate (Fastest on supported mobile GPUs)
+            try {
+                val compatList = CompatibilityList()
+                val gpuOptions = if (compatList.isDelegateSupportedOnThisDevice) {
+                    compatList.bestOptionsForThisDevice
+                } else {
+                    GpuDelegate.Options().apply {
+                        setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER)
+                        setQuantizedModelsAllowed(true)
+                    }
+                }
+                val gpuDelegate = GpuDelegate(gpuOptions)
+                val options = Interpreter.Options().apply {
+                    addDelegate(gpuDelegate)
+                    setNumThreads(4)
+                }
+                val interpreter = Interpreter(model, options)
+                interpreter.allocateTensors()
+                Log.d(TAG, "TFLite interpreter ready (GPU Delegate)")
+                return interpreter to listOf(gpuDelegate)
+            } catch (e: Exception) {
+                lastError = e
+                Log.w(TAG, "GPU Delegate init failed, falling back: ${e.message}")
+            }
+
+            // 2. Try NNAPI Hardware Acceleration
             try {
                 val nnapi = NnApiDelegate()
                 val options = Interpreter.Options().apply {
@@ -283,8 +311,12 @@ class TflitePlateDetector(
                 Log.w(TAG, "NNAPI init failed: ${e.message}")
             }
 
+            // 3. Fallback to Multi-Threaded CPU (with XNNPACK)
             val cpuAttempts = listOf(
-                "CPU-4" to Interpreter.Options().apply { setNumThreads(4) },
+                "CPU-4" to Interpreter.Options().apply {
+                    setNumThreads(4)
+                    setUseXNNPACK(true)
+                },
                 "CPU-noXNN" to Interpreter.Options().apply {
                     setNumThreads(4)
                     setUseXNNPACK(false)

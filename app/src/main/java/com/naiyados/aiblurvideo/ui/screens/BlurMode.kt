@@ -747,6 +747,8 @@ fun BlurMode(
                             BlurStrengthSlider(
                                 modifier = Modifier.fillMaxWidth(),
                                 value = blurStrength,
+                                label = "Plate Blur",
+                                testTag = "plate_blur_strength_slider",
                                 onValueChange = { blurStrength = it }
                             )
 
@@ -768,10 +770,22 @@ fun BlurMode(
                         }
                     }
 
-                    BlurMode.FullBlur, BlurMode.Background -> {
+                    BlurMode.FullBlur -> {
                         BlurStrengthSlider(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                             value = blurStrength,
+                            label = "Full Blur",
+                            testTag = "full_blur_strength_slider",
+                            onValueChange = { blurStrength = it }
+                        )
+                    }
+
+                    BlurMode.Background -> {
+                        BlurStrengthSlider(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                            value = blurStrength,
+                            label = "Background Blur",
+                            testTag = "background_blur_strength_slider",
                             onValueChange = { blurStrength = it }
                         )
                     }
@@ -780,6 +794,8 @@ fun BlurMode(
                         BlurStrengthSlider(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                             value = blurStrength,
+                            label = "Face Blur",
+                            testTag = "face_blur_strength_slider",
                             onValueChange = { blurStrength = it }
                         )
                     }
@@ -792,6 +808,8 @@ fun BlurMode(
                             BlurStrengthSlider(
                                 modifier = Modifier.fillMaxWidth(),
                                 value = blurStrength,
+                                label = "Object Blur",
+                                testTag = "object_blur_strength_slider",
                                 onValueChange = { blurStrength = it }
                             )
                         }

@@ -81,9 +81,13 @@ fun AutoPlateOverlay(
 
                 // Render Blur / Privacy Shield if enabled
                 if (isBlurEnabled) {
-                    // Solid black privacy cover over license plate
+                    val strengthClamped = blurStrength.coerceIn(0.1f, 1.0f)
+                    val maskAlpha = 0.45f + strengthClamped * 0.54f
+                    val strokeAlpha = 0.5f + strengthClamped * 0.45f
+
+                    // Solid/diffused privacy cover over license plate based on strength
                     drawRoundRect(
-                        color = Color.Black.copy(alpha = 0.94f),
+                        color = Color.Black.copy(alpha = maskAlpha),
                         topLeft = Offset(mappedPaddedRect.left, mappedPaddedRect.top),
                         size = Size(mappedPaddedRect.width(), mappedPaddedRect.height()),
                         cornerRadius = CornerRadius(10f, 10f)
@@ -93,8 +97,8 @@ fun AutoPlateOverlay(
                     drawRoundRect(
                         brush = Brush.linearGradient(
                             listOf(
-                                Color(0xFFFF2B85).copy(alpha = 0.85f),
-                                Color(0xFF7A22FF).copy(alpha = 0.85f)
+                                Color(0xFFFF2B85).copy(alpha = strokeAlpha),
+                                Color(0xFF7A22FF).copy(alpha = strokeAlpha)
                             )
                         ),
                         topLeft = Offset(mappedPaddedRect.left, mappedPaddedRect.top),
