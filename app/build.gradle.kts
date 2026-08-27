@@ -20,18 +20,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        create("debugConfig") {
-            storeFile = file("${rootDir}/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debugConfig")
         }
         release {
             // Phones only — no x86/x86_64 emulator libs in the release artifact.
