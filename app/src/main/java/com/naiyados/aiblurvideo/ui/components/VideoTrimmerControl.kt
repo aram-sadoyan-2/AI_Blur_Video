@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 import kotlin.math.max
 
 @Composable
@@ -38,6 +39,7 @@ fun VideoTrimmerControl(
     onTrimChange: (startMs: Long, endMs: Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val appColors = LocalAppColors.current
     val durationSafe = max(1000L, totalDurationMs)
     val effectiveEndMs = if (trimEndMs > trimStartMs) trimEndMs else durationSafe
     val selectedDurationMs = max(0L, effectiveEndMs - trimStartMs)
@@ -67,7 +69,7 @@ fun VideoTrimmerControl(
                     Icon(
                         imageVector = Icons.Rounded.ContentCut,
                         contentDescription = null,
-                        tint = AiBlurColors.Pink,
+                        tint = appColors.primary,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
@@ -80,7 +82,7 @@ fun VideoTrimmerControl(
 
                 Text(
                     text = "Clip: ${formatTime(selectedDurationMs)}",
-                    color = AiBlurColors.Pink,
+                    color = appColors.primary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
@@ -98,8 +100,8 @@ fun VideoTrimmerControl(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(
-                    thumbColor = AiBlurColors.Pink,
-                    activeTrackColor = AiBlurColors.Pink,
+                    thumbColor = appColors.primary,
+                    activeTrackColor = appColors.primary,
                     inactiveTrackColor = Color.White.copy(alpha = 0.15f)
                 )
             )

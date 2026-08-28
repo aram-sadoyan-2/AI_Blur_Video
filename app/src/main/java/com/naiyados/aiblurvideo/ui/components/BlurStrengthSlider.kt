@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 
 @Composable
 fun BlurStrengthSlider(
@@ -35,6 +36,7 @@ fun BlurStrengthSlider(
     testTag: String = "blur_strength_slider",
     onValueChange: (Float) -> Unit
 ) {
+    val appColors = LocalAppColors.current
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -54,7 +56,7 @@ fun BlurStrengthSlider(
             Icon(
                 imageVector = Icons.Rounded.BlurOn,
                 contentDescription = null,
-                tint = AiBlurColors.Pink,
+                tint = appColors.primary,
                 modifier = Modifier.size(16.dp)
             )
 
@@ -75,7 +77,7 @@ fun BlurStrengthSlider(
                 valueRange = 0f..1f,
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
-                    activeTrackColor = AiBlurColors.Pink,
+                    activeTrackColor = appColors.primary,
                     inactiveTrackColor = Color.White.copy(alpha = 0.16f)
                 )
             )

@@ -139,7 +139,7 @@ fun ExportSettingsDialog(
                                 .clip(CircleShape)
                                 .background(
                                     Brush.linearGradient(
-                                        listOf(AiBlurColors.Pink, AiBlurColors.Purple)
+                                        listOf(appColors.primary, appColors.secondary)
                                     )
                                 ),
                             contentAlignment = Alignment.Center
@@ -188,7 +188,7 @@ fun ExportSettingsDialog(
                     ) {
                         Text(
                             text = "OUTPUT RESOLUTION",
-                            color = AiBlurColors.Pink,
+                            color = appColors.primary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
@@ -309,7 +309,7 @@ fun ExportSettingsDialog(
                             },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = AiBlurColors.Pink,
+                                checkedTrackColor = appColors.primary,
                                 uncheckedThumbColor = appColors.textSecondary,
                                 uncheckedTrackColor = appColors.surfaceElevated
                             )
@@ -399,7 +399,7 @@ fun ExportSettingsDialog(
                             .testTag("start_export_button"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AiBlurColors.Pink
+                            containerColor = appColors.primary
                         )
                     ) {
                         Icon(
@@ -433,11 +433,11 @@ private fun SettingOptionRow(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) AiBlurColors.Pink.copy(alpha = if (appColors.isDark) 0.16f else 0.10f)
+        color = if (isSelected) appColors.primary.copy(alpha = if (appColors.isDark) 0.16f else 0.10f)
                 else appColors.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(
             width = 1.dp,
-            color = if (isSelected) AiBlurColors.Pink else appColors.border
+            color = if (isSelected) appColors.primary else appColors.border
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -467,7 +467,7 @@ private fun SettingOptionRow(
                     modifier = Modifier
                         .size(20.dp)
                         .clip(CircleShape)
-                        .background(AiBlurColors.Pink),
+                        .background(appColors.primary),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

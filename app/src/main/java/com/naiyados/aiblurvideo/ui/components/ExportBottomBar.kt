@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 
 @Composable
 fun ExportBottomBar(
@@ -29,6 +30,7 @@ fun ExportBottomBar(
     onExportClick: () -> Unit,
     onPremiumClick: () -> Unit
 ) {
+    val appColors = LocalAppColors.current
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
@@ -63,7 +65,7 @@ fun ExportBottomBar(
                 onClick = if (isPremium) onExportClick else onPremiumClick,
                 shape = RoundedCornerShape(20.dp),
                 color = if (isPremium) {
-                    AiBlurColors.Pink
+                    appColors.primary
                 } else {
                     AiBlurColors.Orange
                 }

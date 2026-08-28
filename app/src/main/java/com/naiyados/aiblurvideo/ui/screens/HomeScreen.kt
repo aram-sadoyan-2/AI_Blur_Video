@@ -122,6 +122,20 @@ fun HomeScreen(
             )
         }
 
+        item {
+            ImportVideoBigButton(
+                onClick = onImportVideoClick
+            )
+        }
+
+        item {
+            BatchQueueHeroBanner(
+                queueCount = queueItems.size,
+                isProcessing = isQueueProcessing,
+                onClick = onOpenBatchQueue
+            )
+        }
+
         if (historyItems.isNotEmpty()) {
             item {
                 HistorySection(
@@ -135,33 +149,7 @@ fun HomeScreen(
         }
 
         item {
-            BatchQueueHeroBanner(
-                queueCount = queueItems.size,
-                isProcessing = isQueueProcessing,
-                onClick = onOpenBatchQueue
-            )
-        }
-
-        item {
-            HeroSection()
-        }
-
-        item {
             FeatureSectionCompact()
-        }
-
-        item {
-            ImportVideoBigButton(
-                onClick = onImportVideoClick
-            )
-        }
-
-        item {
-            SmallInstructionCard()
-        }
-
-        item {
-            TipCard()
         }
     }
 }
@@ -373,63 +361,43 @@ private fun HomeHeader(
 }
 
 @Composable
-private fun HeroSection() {
-    Box(
+private fun ImportVideoBigButton(
+    onClick: () -> Unit
+) {
+    Button(
         modifier = Modifier
             .fillMaxWidth()
-            .height(205.dp)
-            .clip(RoundedCornerShape(30.dp))
-            .background(AiBlurColors.AccentGradient)
-            .padding(2.dp)
+            .height(56.dp)
+            .testTag("choose_video_button"),
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color.White
+        ),
+        contentPadding = PaddingValues()
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color.Black.copy(alpha = 0.36f))
-                .padding(20.dp)
+                .background(AiBlurColors.AccentGradient),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.align(Alignment.CenterStart),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.White.copy(alpha = 0.16f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-
-                        Text(
-                            text = "AI powered",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-
-                Text(
-                    text = "Blur videos\nlike a pro",
-                    color = Color.White,
-                    fontSize = 30.sp,
-                    lineHeight = 33.sp,
-                    fontWeight = FontWeight.ExtraBold
+                Icon(
+                    imageVector = Icons.Rounded.Movie,
+                    contentDescription = null,
+                    tint = Color.White
                 )
 
                 Text(
-                    text = "Choose a video below and start applying smart blur.",
-                    color = Color.White.copy(alpha = 0.78f),
-                    fontSize = 14.sp,
-                    lineHeight = 19.sp
+                    text = "Choose Video to Blur",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
             }
         }
@@ -484,150 +452,33 @@ private fun CompactFeatureTile(
     modifier: Modifier = Modifier
 ) {
     val appColors = LocalAppColors.current
-    Card(
-        modifier = modifier.height(78.dp),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = AiBlurColors.Panel
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = appColors.border
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (appColors.isDark) 0.dp else 2.dp
-        )
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = if (appColors.isDark) Color(0xFF141724) else appColors.surface,
+        border = BorderStroke(1.dp, appColors.border),
+        shadowElevation = if (appColors.isDark) 0.dp else 1.dp,
+        modifier = modifier.height(72.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = title,
-                color = AiBlurColors.TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold,
+                color = appColors.textPrimary,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1
             )
 
             Text(
                 text = subtitle,
-                color = AiBlurColors.TextSecondary,
-                fontSize = 13.sp,
+                color = appColors.textSecondary,
+                fontSize = 11.5.sp,
                 maxLines = 1
             )
         }
-    }
-}
-
-@Composable
-private fun ImportVideoBigButton(
-    onClick: () -> Unit
-) {
-    Button(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .testTag("choose_video_button"),
-        onClick = onClick,
-        shape = RoundedCornerShape(22.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            contentColor = Color.White
-        ),
-        contentPadding = PaddingValues()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(AiBlurColors.AccentGradient),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(9.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Movie,
-                    contentDescription = null,
-                    tint = Color.White
-                )
-
-                Text(
-                    text = "Choose Video",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SmallInstructionCard() {
-    val appColors = LocalAppColors.current
-    GlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = if (appColors.isDark) Color.White.copy(alpha = 0.10f) else appColors.surfaceVariant
-            ) {
-                Icon(
-                    modifier = Modifier.padding(10.dp),
-                    imageVector = Icons.Rounded.PlayCircle,
-                    contentDescription = null,
-                    tint = if (appColors.isDark) Color.White else appColors.textPrimary
-                )
-            }
-
-            Column {
-                Text(
-                    text = "Start by choosing a video",
-                    color = appColors.textPrimary,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 14.sp
-                )
-
-                Text(
-                    text = "The gallery picker opens after tapping Choose Video.",
-                    color = AiBlurColors.TextSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TipCard() {
-    val appColors = LocalAppColors.current
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (appColors.isDark) Color.White.copy(alpha = 0.06f) else appColors.surface
-        ),
-        border = BorderStroke(1.dp, appColors.border),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (appColors.isDark) 0.dp else 1.dp
-        )
-    ) {
-        Text(
-            modifier = Modifier.padding(16.dp),
-            text = "Free users can preview AI blur. Premium unlocks HD export and removes watermark.",
-            color = AiBlurColors.TextSecondary,
-            fontSize = 13.sp,
-            lineHeight = 19.sp
-        )
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 
 @Composable
 fun BlurModeChip(
@@ -27,18 +28,19 @@ fun BlurModeChip(
     locked: Boolean,
     onClick: () -> Unit
 ) {
+    val appColors = LocalAppColors.current
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
         color = if (selected) {
-            AiBlurColors.Pink.copy(alpha = 0.24f)
+            appColors.primary.copy(alpha = 0.24f)
         } else {
             Color.White.copy(alpha = 0.07f)
         },
         border = BorderStroke(
             width = 1.dp,
             color = if (selected) {
-                AiBlurColors.Pink.copy(alpha = 0.75f)
+                appColors.primary.copy(alpha = 0.75f)
             } else {
                 Color.White.copy(alpha = 0.10f)
             }

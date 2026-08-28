@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 import kotlinx.coroutines.delay
 
 @Composable
@@ -39,6 +40,7 @@ fun PlaybackTimeline(
     player: Player?,
     modifier: Modifier = Modifier
 ) {
+    val appColors = LocalAppColors.current
     var positionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
@@ -161,7 +163,7 @@ fun PlaybackTimeline(
                 },
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
-                    activeTrackColor = AiBlurColors.Pink,
+                    activeTrackColor = appColors.primary,
                     inactiveTrackColor = Color.White.copy(alpha = 0.14f)
                 )
             )

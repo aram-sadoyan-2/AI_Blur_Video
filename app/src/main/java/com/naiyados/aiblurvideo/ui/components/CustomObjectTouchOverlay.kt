@@ -303,10 +303,10 @@ fun CustomObjectTouchOverlay(
             val cx = (left + right) / 2f
             val cy = (top + bottom) / 2f
 
-            val primaryNeon = Color(0xFFFF007F) // Electric Neon Pink
-            val cyanAccent = Color(0xFF00E5FF)  // Cyber Cyan
+            val primaryNeon = Color(0xFF00E5FF) // Cyber Cyan
+            val cyanAccent = Color(0xFF2979FF)  // Electric Blue
             val handleFill = Color(0xFF0F172A)   // Deep Slate
-            val activeHighlight = Color(0xFF00FF66) // Neon Green active halo
+            val activeHighlight = Color(0xFF10B981) // Neon Green active halo
 
             rotate(degrees = currentRotation, pivot = Offset(cx, cy)) {
                 // 1. Frosted Blur Simulation Core

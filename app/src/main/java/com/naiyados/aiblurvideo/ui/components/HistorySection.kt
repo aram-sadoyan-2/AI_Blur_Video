@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.history.ProcessedVideoRecord
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 import com.naiyados.aiblurvideo.util.ShareHelper
 import com.naiyados.aiblurvideo.util.rememberVideoThumbnail
 
@@ -57,6 +58,7 @@ fun HistorySection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val appColors = LocalAppColors.current
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -74,12 +76,12 @@ fun HistorySection(
                 Icon(
                     imageVector = Icons.Rounded.History,
                     contentDescription = null,
-                    tint = AiBlurColors.Pink,
+                    tint = appColors.primary,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "Recent Processed Videos",
-                    color = Color.White,
+                    color = appColors.textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
@@ -87,7 +89,7 @@ fun HistorySection(
 
             Text(
                 text = "${items.size} videos",
-                color = Color.White.copy(alpha = 0.5f),
+                color = appColors.textSecondary,
                 fontSize = 12.sp
             )
         }
@@ -116,6 +118,7 @@ private fun HistoryItemCard(
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
+    val appColors = LocalAppColors.current
     val thumbnail = rememberVideoThumbnail(context = context, uri = record.uri)
 
     Card(
@@ -124,8 +127,10 @@ private fun HistoryItemCard(
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onOpen),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C28)),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        colors = CardDefaults.cardColors(
+            containerColor = if (appColors.isDark) Color(0xFF181A28) else appColors.surface
+        ),
+        border = BorderStroke(1.dp, appColors.border)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
@@ -200,7 +205,7 @@ private fun HistoryItemCard(
             ) {
                 Text(
                     text = "${record.blurredFrames} blurred frames",
-                    color = Color.White,
+                    color = appColors.textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -214,19 +219,19 @@ private fun HistoryItemCard(
                 ) {
                     Text(
                         text = record.resolutionLabel,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = appColors.textSecondary,
                         fontSize = 10.sp
                     )
 
                     Surface(
                         onClick = onShare,
                         shape = RoundedCornerShape(4.dp),
-                        color = AiBlurColors.Pink.copy(alpha = 0.2f)
+                        color = appColors.primary.copy(alpha = 0.2f)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Share,
                             contentDescription = "Share",
-                            tint = AiBlurColors.Pink,
+                            tint = appColors.primary,
                             modifier = Modifier
                                 .padding(3.dp)
                                 .size(11.dp)

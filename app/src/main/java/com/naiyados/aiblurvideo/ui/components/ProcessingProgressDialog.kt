@@ -102,8 +102,8 @@ fun ProcessingProgressDialog(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    AiBlurColors.Pink.copy(alpha = 0.35f),
-                                    AiBlurColors.Purple.copy(alpha = 0.35f)
+                                    appColors.primary.copy(alpha = 0.35f),
+                                    appColors.secondary.copy(alpha = 0.35f)
                                 )
                             )
                         ),
@@ -111,7 +111,7 @@ fun ProcessingProgressDialog(
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(72.dp),
-                        color = AiBlurColors.Pink,
+                        color = appColors.primary,
                         strokeWidth = 3.dp,
                         trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.08f) else appColors.surfaceElevated
                     )
@@ -160,7 +160,7 @@ fun ProcessingProgressDialog(
                             Icon(
                                 imageVector = Icons.Rounded.Memory,
                                 contentDescription = null,
-                                tint = AiBlurColors.Pink,
+                                tint = appColors.primary,
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
@@ -217,7 +217,7 @@ fun ProcessingProgressDialog(
                         )
                         Text(
                             text = "$percent%",
-                            color = AiBlurColors.Pink,
+                            color = appColors.primary,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 15.sp,
                             modifier = Modifier.testTag("saving_progress_percentage")
@@ -231,7 +231,7 @@ fun ProcessingProgressDialog(
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .testTag("saving_progress_bar"),
-                        color = AiBlurColors.Pink,
+                        color = appColors.primary,
                         trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.12f) else appColors.surfaceElevated
                     )
                 }

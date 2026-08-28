@@ -711,7 +711,7 @@ fun BlurMode(
                             color = Color.Black.copy(alpha = 0.70f),
                             border = BorderStroke(
                                 width = 0.8.dp,
-                                color = if (isPlateBlurEnabled) AiBlurColors.Pink else Color.White.copy(alpha = 0.2f)
+                                color = if (isPlateBlurEnabled) appColors.primary else Color.White.copy(alpha = 0.2f)
                             )
                         ) {
                             Row(
@@ -722,7 +722,7 @@ fun BlurMode(
                                 Icon(
                                     imageVector = Icons.Rounded.DirectionsCar,
                                     contentDescription = null,
-                                    tint = if (isPlateBlurEnabled) AiBlurColors.Pink else Color.White.copy(alpha = 0.5f),
+                                    tint = if (isPlateBlurEnabled) appColors.primary else Color.White.copy(alpha = 0.5f),
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
