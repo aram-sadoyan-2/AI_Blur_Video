@@ -105,9 +105,11 @@ object FrameEffectProcessor {
                 }
             }
             BlurMode.FullBlur -> {
-                val blurred = FastStackBlur.blur(current, config.blurStrength)
-                if (current != source && current != blurred) current.recycle()
-                current = blurred
+                if (config.shouldBlurFrame(timeMs)) {
+                    val blurred = FastStackBlur.blur(current, config.blurStrength)
+                    if (current != source && current != blurred) current.recycle()
+                    current = blurred
+                }
             }
             BlurMode.Face -> {
                 val timelineFaces = timeline?.faceBoxesAt(timeMs) ?: emptyList()

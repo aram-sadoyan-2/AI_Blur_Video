@@ -24,9 +24,36 @@ data class VideoEditConfig(
     val customObjectNormalizedRect: RectF? = null, // Normalized 0..1 coordinates for custom object box
     val customObjectRotationDegrees: Float = 0f,
     val customObjectShape: CustomBlurShape = CustomBlurShape.ROUNDED_RECT,
+    val isFullVideoBlur: Boolean = true, // If true, blur entire video in FullBlur mode
+    val blurFrameRangeStartMs: Long = 0L,
+    val blurFrameRangeEndMs: Long = 0L,
+    val selectedBlurFrameTimestampsMs: Set<Long> = emptySet(), // Individual selected frame timestamps
     val isMuted: Boolean = false,
     val exportSettings: ExportSettings = ExportSettings()
 ) {
+    /**
+     * Helper to determine if a specific frame timestamp (in ms) should be blurred in FullBlur mode.
+     */
+    fun shouldBlurFrame(timeMs: Long): Boolean {
+        if (blurMode != BlurMode.FullBlur) return false
+        if (isFullVideoBlur) return true
+
+        // Check if falls within range
+        if (blurFrameRangeEndMs > blurFrameRangeStartMs && timeMs in blurFrameRangeStartMs..blurFrameRangeEndMs) {
+            return true
+        }
+
+        // Check individual selected frames (allow +/- 1000ms frame cluster window)
+        if (selectedBlurFrameTimestampsMs.isNotEmpty()) {
+            val hasNearMatch = selectedBlurFrameTimestampsMs.any { selTime ->
+                kotlin.math.abs(selTime - timeMs) <= 500L
+            }
+            if (hasNearMatch) return true
+        }
+
+        return false
+    }
+
     fun hasActiveEdits(): Boolean {
         return blurMode != BlurMode.AutoPlate ||
                 filter != VideoFilter.NONE ||

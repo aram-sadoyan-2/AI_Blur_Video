@@ -16,7 +16,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -52,6 +54,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -198,6 +201,23 @@ fun BlurMode(
         mutableIntStateOf(24)
     }
 
+    // Selective Frame Blur states for FullBlur mode
+    var isFullVideoBlur by remember {
+        mutableStateOf(true) // true = entire video blurred; false = only selected frames/range
+    }
+
+    var blurFrameRangeStartMs by remember {
+        mutableLongStateOf(0L)
+    }
+
+    var blurFrameRangeEndMs by remember {
+        mutableLongStateOf(0L)
+    }
+
+    var selectedBlurFrameTimestamps by remember {
+        mutableStateOf<Set<Long>>(emptySet())
+    }
+
     var isPlaying by remember {
         mutableStateOf(false)
     }
@@ -328,6 +348,10 @@ fun BlurMode(
             customObjectNormalizedRect = customObjectRect,
             customObjectRotationDegrees = customObjectRotation,
             customObjectShape = customObjectShape,
+            isFullVideoBlur = isFullVideoBlur,
+            blurFrameRangeStartMs = blurFrameRangeStartMs,
+            blurFrameRangeEndMs = blurFrameRangeEndMs,
+            selectedBlurFrameTimestampsMs = selectedBlurFrameTimestamps,
             isMuted = isMuted,
             exportSettings = exportSettings
         )
@@ -361,6 +385,10 @@ fun BlurMode(
         customObjectRect = config.customObjectNormalizedRect
         customObjectRotation = config.customObjectRotationDegrees
         customObjectShape = config.customObjectShape
+        isFullVideoBlur = config.isFullVideoBlur
+        blurFrameRangeStartMs = config.blurFrameRangeStartMs
+        blurFrameRangeEndMs = config.blurFrameRangeEndMs
+        selectedBlurFrameTimestamps = config.selectedBlurFrameTimestampsMs
         isMuted = config.isMuted
         exportSettings = config.exportSettings
     }
@@ -569,6 +597,10 @@ fun BlurMode(
                         customObjectNormalizedRect = customObjectRect,
                         customObjectRotationDegrees = customObjectRotation,
                         customObjectShape = customObjectShape,
+                        isFullVideoBlur = isFullVideoBlur,
+                        blurFrameRangeStartMs = blurFrameRangeStartMs,
+                        blurFrameRangeEndMs = blurFrameRangeEndMs,
+                        selectedBlurFrameTimestampsMs = selectedBlurFrameTimestamps,
                         isMuted = isMuted,
                         exportSettings = settingsToUse
                     )
@@ -654,6 +686,20 @@ fun BlurMode(
         )
 
         // Video Preview Viewport
+        val isFrameBlurActive = remember(
+            selectedMode,
+            isFullVideoBlur,
+            blurFrameRangeStartMs,
+            blurFrameRangeEndMs,
+            selectedBlurFrameTimestamps,
+            currentPositionMs
+        ) {
+            if (selectedMode != BlurMode.FullBlur) false
+            else if (isFullVideoBlur) true
+            else if (blurFrameRangeEndMs > blurFrameRangeStartMs && currentPositionMs in blurFrameRangeStartMs..blurFrameRangeEndMs) true
+            else selectedBlurFrameTimestamps.any { kotlin.math.abs(it - currentPositionMs) <= 500L }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -666,6 +712,7 @@ fun BlurMode(
                 selectedMode = selectedMode,
                 blurStrength = blurStrength,
                 isPlaying = isPlaying,
+                isFrameBlurActive = isFrameBlurActive,
                 onPlayPauseClick = {
                     isPlaying = !isPlaying
                 },
@@ -918,7 +965,7 @@ fun BlurMode(
             }
         )
 
-        // Video Frame Scrubber
+        // Video Frame Scrubber with Direct Bordered Trimming
         VideoFrameStripSection(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
             videoUri = videoUri,
@@ -946,6 +993,32 @@ fun BlurMode(
                         wasPlayingBeforeScrub = false
                     }
                 }
+            },
+            isFullBlurMode = selectedMode == BlurMode.FullBlur,
+            isFullVideoBlur = isFullVideoBlur,
+            blurFrameRangeStartMs = blurFrameRangeStartMs,
+            blurFrameRangeEndMs = blurFrameRangeEndMs,
+            selectedBlurFrameTimestampsMs = selectedBlurFrameTimestamps,
+            onToggleFrameBlur = { frameMs ->
+                saveSnapshotForUndo()
+                if (isFullVideoBlur) {
+                    isFullVideoBlur = false
+                    selectedBlurFrameTimestamps = setOf(frameMs)
+                } else {
+                    selectedBlurFrameTimestamps = if (selectedBlurFrameTimestamps.contains(frameMs)) {
+                        selectedBlurFrameTimestamps - frameMs
+                    } else {
+                        selectedBlurFrameTimestamps + frameMs
+                    }
+                }
+            },
+            trimStartMs = trimStartMs,
+            trimEndMs = if (trimEndMs > 0) trimEndMs else maxOf(videoTotalDurationMs, player.duration, 5000L),
+            playbackSpeed = playbackSpeed,
+            onTrimChange = { start, end ->
+                saveSnapshotForUndo()
+                trimStartMs = start
+                trimEndMs = end
             }
         )
 
@@ -1003,13 +1076,178 @@ fun BlurMode(
                     }
 
                     BlurMode.FullBlur -> {
-                        BlurStrengthSlider(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                            value = blurStrength,
-                            label = "Full Blur",
-                            testTag = "full_blur_strength_slider",
-                            onValueChange = { blurStrength = it }
-                        )
+                        val isSelectedFramesMode = !isFullVideoBlur && blurFrameRangeEndMs <= blurFrameRangeStartMs
+                        val isRangeMode = !isFullVideoBlur && blurFrameRangeEndMs > blurFrameRangeStartMs
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 2.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            BlurStrengthSlider(
+                                modifier = Modifier.fillMaxWidth(),
+                                value = blurStrength,
+                                label = "Full Blur",
+                                testTag = "full_blur_strength_slider",
+                                onValueChange = { blurStrength = it }
+                            )
+
+                            // Frame-selection scope chips
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 1. All Video
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isFullVideoBlur) Color(0xFF00A2FF) else Color(0xFF1E212A),
+                                    border = BorderStroke(1.dp, if (isFullVideoBlur) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.1f)),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                        .clickable {
+                                            saveSnapshotForUndo()
+                                            isFullVideoBlur = true
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "All Video",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isFullVideoBlur) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isFullVideoBlur) Color.White else Color.White.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+
+                                // 2. Selected Frames (Tap to blur)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelectedFramesMode) Color(0xFF00A2FF) else Color(0xFF1E212A),
+                                    border = BorderStroke(1.dp, if (isSelectedFramesMode) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.1f)),
+                                    modifier = Modifier
+                                        .weight(1.2f)
+                                        .height(34.dp)
+                                        .clickable {
+                                            saveSnapshotForUndo()
+                                            isFullVideoBlur = false
+                                            blurFrameRangeStartMs = 0L
+                                            blurFrameRangeEndMs = 0L
+                                            if (selectedBlurFrameTimestamps.isEmpty()) {
+                                                // Seed with current playhead second
+                                                val secMs = (currentPositionMs / 1000L) * 1000L
+                                                selectedBlurFrameTimestamps = setOf(secMs)
+                                            }
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = if (selectedBlurFrameTimestamps.isNotEmpty()) "Frames (${selectedBlurFrameTimestamps.size})" else "Select Frames",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelectedFramesMode) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelectedFramesMode) Color.White else Color.White.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+
+                                // 3. Range (Start / End)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isRangeMode) Color(0xFF00A2FF) else Color(0xFF1E212A),
+                                    border = BorderStroke(1.dp, if (isRangeMode) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.1f)),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                        .clickable {
+                                            saveSnapshotForUndo()
+                                            isFullVideoBlur = false
+                                            selectedBlurFrameTimestamps = emptySet()
+                                            if (blurFrameRangeEndMs <= blurFrameRangeStartMs) {
+                                                blurFrameRangeStartMs = currentPositionMs
+                                                blurFrameRangeEndMs = (currentPositionMs + 3000L).coerceAtMost(videoTotalDurationMs.coerceAtLeast(5000L))
+                                            }
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "Range",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isRangeMode) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isRangeMode) Color.White else Color.White.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Secondary context controls for Selective / Range modes
+                            if (!isFullVideoBlur) {
+                                if (isSelectedFramesMode) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "💡 Tap frame thumbnails below to toggle blur (💧)",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF64B5F6)
+                                        )
+                                        if (selectedBlurFrameTimestamps.isNotEmpty()) {
+                                            Text(
+                                                text = "Clear all",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFFFF5252),
+                                                modifier = Modifier.clickable {
+                                                    saveSnapshotForUndo()
+                                                    selectedBlurFrameTimestamps = emptySet()
+                                                }
+                                            )
+                                        }
+                                    }
+                                } else if (isRangeMode) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                saveSnapshotForUndo()
+                                                blurFrameRangeStartMs = currentPositionMs
+                                                if (blurFrameRangeEndMs <= blurFrameRangeStartMs) {
+                                                    blurFrameRangeEndMs = blurFrameRangeStartMs + 1000L
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(6.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23252E)),
+                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                        ) {
+                                            Text("Start: ${formatDuration(blurFrameRangeStartMs)}", fontSize = 11.sp, color = Color.White)
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                saveSnapshotForUndo()
+                                                blurFrameRangeEndMs = currentPositionMs
+                                                if (blurFrameRangeStartMs >= blurFrameRangeEndMs) {
+                                                    blurFrameRangeStartMs = (blurFrameRangeEndMs - 1000L).coerceAtLeast(0L)
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(6.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23252E)),
+                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                        ) {
+                                            Text("End: ${formatDuration(blurFrameRangeEndMs)}", fontSize = 11.sp, color = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     BlurMode.Background -> {
@@ -1279,16 +1517,33 @@ fun BlurMode(
                                 }
                             )
 
-                            VideoTrimmerControl(
-                                totalDurationMs = maxOf(videoTotalDurationMs, player.duration, 5000L),
-                                trimStartMs = trimStartMs,
-                                trimEndMs = if (trimEndMs > 0) trimEndMs else maxOf(videoTotalDurationMs, player.duration, 5000L),
-                                onTrimChange = { start, end ->
-                                    trimStartMs = start
-                                    trimEndMs = end
-                                    player.seekTo(start)
+                            // Clean trim indicator & reset bar
+                            val maxDur = maxOf(videoTotalDurationMs, player.duration, 5000L)
+                            val isTrimmed = trimStartMs > 0L || (trimEndMs in 1 until maxDur)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "💡 Drag the cyan left/right handles on the timeline above to cut & trim",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF4EF2C8)
+                                )
+                                if (isTrimmed) {
+                                    Text(
+                                        text = "Reset Full",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.clickable {
+                                            saveSnapshotForUndo()
+                                            trimStartMs = 0L
+                                            trimEndMs = maxDur
+                                        }
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }
@@ -1501,4 +1756,11 @@ fun BlurMode(
             }
         )
     }
+}
+
+private fun formatDuration(ms: Long): String {
+    val totalSeconds = ms.coerceAtLeast(0L) / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "%02d:%02d".format(minutes, seconds)
 }

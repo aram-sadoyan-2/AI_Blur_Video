@@ -85,7 +85,8 @@ fun VideoPreviewPanel(
     customObjectRotationDegrees: Float = 0f,
     customObjectShape: com.naiyados.aiblurvideo.ui.model.CustomBlurShape = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT,
     onCustomObjectRectChange: (RectF) -> Unit = {},
-    onCustomObjectRotationChange: (Float) -> Unit = {}
+    onCustomObjectRotationChange: (Float) -> Unit = {},
+    isFrameBlurActive: Boolean = true
 ) {
     var rawVideoWidth by remember { mutableIntStateOf(player?.videoSize?.width?.takeIf { it > 0 } ?: 1080) }
     var rawVideoHeight by remember { mutableIntStateOf(player?.videoSize?.height?.takeIf { it > 0 } ?: 1920) }
@@ -111,7 +112,7 @@ fun VideoPreviewPanel(
     }
 
     val blurRadiusPx = when (selectedMode) {
-        BlurMode.FullBlur -> if (blurStrength > 0.02f) (blurStrength * 90f).coerceIn(4f, 180f) else 0f
+        BlurMode.FullBlur -> if (isFrameBlurActive && blurStrength > 0.02f) (blurStrength * 90f).coerceIn(4f, 180f) else 0f
         else -> 0f
     }
 
@@ -123,18 +124,6 @@ fun VideoPreviewPanel(
 
     val previewRatio = if (selectedMode == BlurMode.Crop) naturalVideoRatio else (aspectRatio.ratioValue ?: naturalVideoRatio)
     val isCropToFill = (selectedMode != BlurMode.Crop && aspectRatio != VideoAspectRatio.ORIGINAL)
-
-    val effectiveScrubBitmap = remember(scrubPreviewBitmap, selectedMode, blurStrength) {
-        if (scrubPreviewBitmap != null && selectedMode == BlurMode.FullBlur && blurStrength > 0.05f) {
-            try {
-                FrameEffectProcessor.blurBitmap(scrubPreviewBitmap, blurStrength)
-            } catch (e: Exception) {
-                scrubPreviewBitmap
-            }
-        } else {
-            scrubPreviewBitmap
-        }
-    }
 
     Box(
         modifier = modifier
@@ -194,15 +183,6 @@ fun VideoPreviewPanel(
                         filterIntensity = filterIntensity,
                         cropToFill = isCropToFill
                     )
-
-                    if (effectiveScrubBitmap != null) {
-                        Image(
-                            bitmap = effectiveScrubBitmap.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = if (isCropToFill) ContentScale.Crop else ContentScale.Fit
-                        )
-                    }
                 }
 
                 // Real-time Bokeh Background Blur Overlay

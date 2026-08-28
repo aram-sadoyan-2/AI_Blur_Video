@@ -8,6 +8,7 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +63,11 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.roundToLong
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.ui.unit.IntOffset
+import java.util.Locale
+
 private data class TimelineFrame(
     val timeMs: Long,
     val bitmap: Bitmap
@@ -76,7 +82,17 @@ fun VideoFrameStripSection(
     maxDurationSeconds: Int = 30,
     onSeekTo: (Long) -> Unit,
     onScrubFrameChange: (Bitmap?) -> Unit = {},
-    onScrubbingStateChanged: (Boolean) -> Unit = {}
+    onScrubbingStateChanged: (Boolean) -> Unit = {},
+    isFullBlurMode: Boolean = false,
+    isFullVideoBlur: Boolean = true,
+    blurFrameRangeStartMs: Long = 0L,
+    blurFrameRangeEndMs: Long = 0L,
+    selectedBlurFrameTimestampsMs: Set<Long> = emptySet(),
+    onToggleFrameBlur: (Long) -> Unit = {},
+    trimStartMs: Long = 0L,
+    trimEndMs: Long = 0L,
+    playbackSpeed: Float = 1.0f,
+    onTrimChange: (startMs: Long, endMs: Long) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -146,7 +162,17 @@ fun VideoFrameStripSection(
             maxDurationSeconds = maxDurationSeconds,
             onSeekTo = onSeekTo,
             onScrubFrameChange = onScrubFrameChange,
-            onScrubbingStateChanged = onScrubbingStateChanged
+            onScrubbingStateChanged = onScrubbingStateChanged,
+            isFullBlurMode = isFullBlurMode,
+            isFullVideoBlur = isFullVideoBlur,
+            blurFrameRangeStartMs = blurFrameRangeStartMs,
+            blurFrameRangeEndMs = blurFrameRangeEndMs,
+            selectedBlurFrameTimestampsMs = selectedBlurFrameTimestampsMs,
+            onToggleFrameBlur = onToggleFrameBlur,
+            trimStartMs = trimStartMs,
+            trimEndMs = trimEndMs,
+            playbackSpeed = playbackSpeed,
+            onTrimChange = onTrimChange
         )
     }
 }
@@ -161,12 +187,23 @@ private fun FixedCenterTimeline(
     maxDurationSeconds: Int,
     onSeekTo: (Long) -> Unit,
     onScrubFrameChange: (Bitmap?) -> Unit,
-    onScrubbingStateChanged: (Boolean) -> Unit
+    onScrubbingStateChanged: (Boolean) -> Unit,
+    isFullBlurMode: Boolean = false,
+    isFullVideoBlur: Boolean = true,
+    blurFrameRangeStartMs: Long = 0L,
+    blurFrameRangeEndMs: Long = 0L,
+    selectedBlurFrameTimestampsMs: Set<Long> = emptySet(),
+    onToggleFrameBlur: (Long) -> Unit = {},
+    trimStartMs: Long = 0L,
+    trimEndMs: Long = 0L,
+    playbackSpeed: Float = 1.0f,
+    onTrimChange: (startMs: Long, endMs: Long) -> Unit = { _, _ -> }
 ) {
     val density = LocalDensity.current
     val latestOnSeekTo by rememberUpdatedState(onSeekTo)
     val latestOnScrubFrameChange by rememberUpdatedState(onScrubFrameChange)
     val latestOnScrubbingStateChanged by rememberUpdatedState(onScrubbingStateChanged)
+    val latestOnTrimChange by rememberUpdatedState(onTrimChange)
     val latestFrames by rememberUpdatedState(frames)
     val latestDurationMs by rememberUpdatedState(durationMs)
 
@@ -179,6 +216,13 @@ private fun FixedCenterTimeline(
         .toInt()
         .coerceAtLeast(1)
         .coerceAtMost(maxDurationSeconds)
+
+    val clipTrackWidth = secondWidth * secondCount
+    val clipTrackWidthPx = secondWidthPx * secondCount
+
+    val effectiveTrimStartMs = trimStartMs.coerceIn(0L, safeDurationMs)
+    val effectiveTrimEndMs = if (trimEndMs > trimStartMs) trimEndMs.coerceIn(0L, safeDurationMs) else safeDurationMs
+    val effectiveDurationMs = safeDurationMs
 
     var isUserDragging by remember { mutableStateOf(false) }
 
@@ -218,7 +262,7 @@ private fun FixedCenterTimeline(
             .height(130.dp)
     ) {
         val sidePadding = maxWidth / 2
-        val totalWidth = sidePadding + (secondWidth * secondCount) + 56.dp + sidePadding
+        val totalWidth = sidePadding + clipTrackWidth + 56.dp + sidePadding
 
         Box(
             modifier = Modifier
@@ -262,7 +306,7 @@ private fun FixedCenterTimeline(
                     .requiredWidth(totalWidth)
                     .fillMaxHeight()
             ) {
-                // 1. Time Ruler Bar
+                // 1. Time Ruler Bar with clean timestamp dots
                 Row(
                     modifier = Modifier
                         .height(22.dp)
@@ -272,17 +316,30 @@ private fun FixedCenterTimeline(
                     Spacer(modifier = Modifier.width(sidePadding))
 
                     repeat(secondCount) { second ->
-                        Box(
+                        val secondMs = second * 1000L
+                        val isSecondBlurred = if (isFullBlurMode) {
+                            if (isFullVideoBlur) true
+                            else if (blurFrameRangeEndMs > blurFrameRangeStartMs && secondMs in blurFrameRangeStartMs..blurFrameRangeEndMs) true
+                            else selectedBlurFrameTimestampsMs.contains(secondMs)
+                        } else false
+
+                        Row(
                             modifier = Modifier
                                 .width(secondWidth)
                                 .fillMaxHeight(),
-                            contentAlignment = Alignment.Center
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
                                 text = formatSecondLabel(second),
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontWeight = FontWeight.Medium,
+                                color = if (isSecondBlurred) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.6f),
+                                fontWeight = if (isSecondBlurred) FontWeight.Bold else FontWeight.Medium,
                                 fontSize = 10.sp
+                            )
+                            Text(
+                                text = "•",
+                                color = Color.White.copy(alpha = 0.25f),
+                                fontSize = 8.sp
                             )
                         }
                     }
@@ -292,35 +349,245 @@ private fun FixedCenterTimeline(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // 2. Video Clips Track
+                // 2. Video Clips Track with Integrated Bordered Trimmer
                 Row(
                     modifier = Modifier
-                        .height(52.dp)
+                        .height(54.dp)
                         .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Spacer(modifier = Modifier.width(sidePadding))
 
-                    // Strip of video thumbnails with rounded corners
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF1E2026),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                        modifier = Modifier.height(52.dp)
+                    // Video Track Box with frames, dimmed areas, and mint border & drag handles
+                    Box(
+                        modifier = Modifier
+                            .width(clipTrackWidth)
+                            .height(54.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxHeight(),
-                            verticalAlignment = Alignment.CenterVertically
+                        // 2a. Base Strip of video thumbnails
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF1E2026),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            repeat(secondCount) { second ->
-                                val frame = frames.firstOrNull {
-                                    it.timeMs >= second * 1000L && it.timeMs < (second + 1) * 1000L
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                repeat(secondCount) { second ->
+                                    val secondMs = second * 1000L
+                                    val frame = frames.firstOrNull {
+                                        it.timeMs >= secondMs && it.timeMs < (second + 1) * 1000L
+                                    }
+
+                                    val isBlurred = if (isFullBlurMode) {
+                                        if (isFullVideoBlur) true
+                                        else if (blurFrameRangeEndMs > blurFrameRangeStartMs && secondMs in blurFrameRangeStartMs..blurFrameRangeEndMs) true
+                                        else selectedBlurFrameTimestampsMs.contains(secondMs)
+                                    } else false
+
+                                    TimelineSecondThumbnailItem(
+                                        frame = frame,
+                                        width = secondWidth,
+                                        height = 54.dp,
+                                        isFullBlurMode = isFullBlurMode,
+                                        isBlurred = isBlurred,
+                                        onToggleBlur = {
+                                            onToggleFrameBlur(secondMs)
+                                        }
+                                    )
                                 }
-                                TimelineSecondThumbnailItem(
-                                    frame = frame,
-                                    width = secondWidth,
-                                    height = 52.dp
+                            }
+                        }
+
+                        // Calculate Trim Geometry
+                        val startFraction = (effectiveTrimStartMs.toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
+                        val endFraction = (effectiveTrimEndMs.toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
+                        val startPx = startFraction * clipTrackWidthPx
+                        val endPx = endFraction * clipTrackWidthPx
+                        val handleWidthPx = with(density) { 14.dp.toPx() }
+                        val trimWidthPx = (endPx - startPx).coerceAtLeast(handleWidthPx * 2)
+
+                        val mintBorderColor = Color(0xFF4EF2C8)
+
+                        // 2b. Dimmed region before trim start
+                        if (startPx > 1f) {
+                            val startDimWidthDp = with(density) { startPx.toDp() }
+                            Box(
+                                modifier = Modifier
+                                    .width(startDimWidthDp)
+                                    .fillMaxHeight()
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                            )
+                        }
+
+                        // 2c. Dimmed region after trim end
+                        if (clipTrackWidthPx - endPx > 1f) {
+                            val endDimWidthDp = with(density) { (clipTrackWidthPx - endPx).toDp() }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(endDimWidthDp)
+                                    .fillMaxHeight()
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                            )
+                        }
+
+                        // 2d. Bordered Lines Box with Left & Right Handles (Exact Match for photo IMG_3820.jpg)
+                        val startOffsetDp = with(density) { startPx.toDp() }
+                        val trimWidthDp = with(density) { trimWidthPx.toDp() }
+
+                        Box(
+                            modifier = Modifier
+                                .offset(x = startOffsetDp)
+                                .width(trimWidthDp)
+                                .fillMaxHeight()
+                        ) {
+                            // Top Border Line
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .align(Alignment.TopCenter)
+                                    .background(mintBorderColor)
+                            )
+
+                            // Bottom Border Line
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .background(mintBorderColor)
+                            )
+
+                            // Left Drag Handle (Rounded bar)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .width(14.dp)
+                                    .fillMaxHeight()
+                                    .background(
+                                        color = mintBorderColor,
+                                        shape = RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp, topEnd = 2.dp, bottomEnd = 2.dp)
+                                    )
+                                    .pointerInput(clipTrackWidthPx, effectiveDurationMs, effectiveTrimEndMs) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = {
+                                                latestOnScrubbingStateChanged(true)
+                                            },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                val deltaMs = ((dragAmount / clipTrackWidthPx) * effectiveDurationMs).toLong()
+                                                val newStart = (effectiveTrimStartMs + deltaMs).coerceIn(0L, effectiveTrimEndMs - 500L)
+                                                latestOnTrimChange(newStart, effectiveTrimEndMs)
+                                                latestOnSeekTo(newStart)
+                                            },
+                                            onDragEnd = {
+                                                latestOnScrubbingStateChanged(false)
+                                            },
+                                            onDragCancel = {
+                                                latestOnScrubbingStateChanged(false)
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Inner grip notch
+                                Box(
+                                    modifier = Modifier
+                                        .width(2.dp)
+                                        .height(18.dp)
+                                        .background(Color(0xFF101B17), RoundedCornerShape(1.dp))
                                 )
+                            }
+
+                            // Right Drag Handle (Rounded bar)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(14.dp)
+                                    .fillMaxHeight()
+                                    .background(
+                                        color = mintBorderColor,
+                                        shape = RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp, topStart = 2.dp, bottomStart = 2.dp)
+                                    )
+                                    .pointerInput(clipTrackWidthPx, effectiveDurationMs, effectiveTrimStartMs) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = {
+                                                latestOnScrubbingStateChanged(true)
+                                            },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                val deltaMs = ((dragAmount / clipTrackWidthPx) * effectiveDurationMs).toLong()
+                                                val newEnd = (effectiveTrimEndMs + deltaMs).coerceIn(effectiveTrimStartMs + 500L, effectiveDurationMs)
+                                                latestOnTrimChange(effectiveTrimStartMs, newEnd)
+                                                latestOnSeekTo(newEnd)
+                                            },
+                                            onDragEnd = {
+                                                latestOnScrubbingStateChanged(false)
+                                            },
+                                            onDragCancel = {
+                                                latestOnScrubbingStateChanged(false)
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Inner grip notch
+                                Box(
+                                    modifier = Modifier
+                                        .width(2.dp)
+                                        .height(18.dp)
+                                        .background(Color(0xFF101B17), RoundedCornerShape(1.dp))
+                                )
+                            }
+
+                            // Speed Badge in bottom-left inside active clip (matches IMG_3820.jpg)
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.Black.copy(alpha = 0.75f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(start = 18.dp, bottom = 5.dp)
+                            ) {
+                                Text(
+                                    text = "x" + String.format(Locale.US, "%.2f", playbackSpeed),
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+
+                            // Duration badge in top-right inside active clip (matches IMG_3820.jpg)
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.Black.copy(alpha = 0.75f),
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(end = 18.dp, top = 5.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                    val clipDurationMs = (effectiveTrimEndMs - effectiveTrimStartMs).coerceAtLeast(0L)
+                                    Text(
+                                        text = formatSecondDuration(clipDurationMs),
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -372,31 +639,73 @@ private fun FixedCenterTimeline(
 private fun TimelineSecondThumbnailItem(
     frame: TimelineFrame?,
     width: Dp,
-    height: Dp
+    height: Dp,
+    isFullBlurMode: Boolean = false,
+    isBlurred: Boolean = false,
+    onToggleBlur: () -> Unit = {}
 ) {
-    if (frame?.bitmap != null) {
-        Image(
-            bitmap = frame.bitmap.asImageBitmap(),
-            contentDescription = null,
-            modifier = Modifier
-                .width(width)
-                .height(height),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .width(width)
-                .height(height)
-                .background(Color(0xFF23252E)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Movie,
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .clickable(enabled = isFullBlurMode) {
+                onToggleBlur()
+            }
+    ) {
+        if (frame?.bitmap != null) {
+            Image(
+                bitmap = frame.bitmap.asImageBitmap(),
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.2f),
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (isBlurred) {
+                            Modifier.background(Color.Black)
+                        } else Modifier
+                    ),
+                contentScale = ContentScale.Crop,
+                alpha = if (isBlurred) 0.65f else 1.0f
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF23252E)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Movie,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.2f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        // Visual Blur Overlay Badge when blurred in FullBlur mode
+        if (isFullBlurMode && isBlurred) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x5500A2FF))
+                    .border(1.5.dp, Color(0xFF64B5F6))
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xDD0D47A1),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                        .size(14.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "💧",
+                            fontSize = 8.sp
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -408,7 +717,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
     onDuration: suspend (Long) -> Unit,
     onFrame: suspend (TimelineFrame) -> Unit
 ) {
-    val videoKey = "v13_125ms_" + videoUri.toString()
+    val videoKey = "v14_320px_" + videoUri.toString()
         .hashCode()
         .toString()
         .replace("-", "m")
@@ -478,8 +787,12 @@ private suspend fun loadCachedTimelineFramesProgressive(
                     if (bitmap != null) {
                         val smallBitmap = createTimelineThumbnail(
                             source = bitmap,
-                            maxSide = 160
+                            maxSide = 320
                         )
+
+                        if (smallBitmap != bitmap) {
+                            bitmap.recycle()
+                        }
 
                         saveBitmapToJpg(
                             bitmap = smallBitmap,
@@ -545,7 +858,7 @@ private fun saveBitmapToJpg(
         FileOutputStream(file).use { output ->
             bitmap.compress(
                 Bitmap.CompressFormat.JPEG,
-                76,
+                92,
                 output
             )
         }
@@ -558,4 +871,11 @@ private fun formatSecondLabel(second: Int): String {
     val minutes = second / 60
     val secs = second % 60
     return "%02d:%02d".format(minutes, secs)
+}
+
+private fun formatSecondDuration(ms: Long): String {
+    val totalSeconds = ms.coerceAtLeast(0L) / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "%02d:%02d".format(minutes, seconds)
 }
