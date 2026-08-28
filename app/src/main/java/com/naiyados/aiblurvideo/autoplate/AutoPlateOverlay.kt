@@ -48,19 +48,19 @@ fun AutoPlateOverlay(
 
     val plateBadgeBorderPaint = remember {
         Paint().apply {
-            color = android.graphics.Color.argb(255, 0, 230, 118)
+            color = android.graphics.Color.argb(255, 16, 185, 129) // Emerald
             isAntiAlias = true
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = 1.5f
         }
     }
 
     val faceBadgeBorderPaint = remember {
         Paint().apply {
-            color = android.graphics.Color.argb(255, 0, 229, 255)
+            color = android.graphics.Color.argb(255, 99, 102, 241) // Indigo
             isAntiAlias = true
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = 1.5f
         }
     }
 
@@ -109,25 +109,19 @@ fun AutoPlateOverlay(
                         cornerRadius = CornerRadius(cornerRadius, cornerRadius)
                     )
 
-                    // Accent glowing border around blurred area
-                    val borderGradient = if (isFace) {
-                        listOf(
-                            Color(0xFF00E5FF).copy(alpha = strokeAlpha),
-                            Color(0xFF7A22FF).copy(alpha = strokeAlpha)
-                        )
+                    // Clean subtle border around blurred area
+                    val borderColor = if (isFace) {
+                        Color(0xFF6366F1).copy(alpha = strokeAlpha * 0.7f)
                     } else {
-                        listOf(
-                            Color(0xFFFF2B85).copy(alpha = strokeAlpha),
-                            Color(0xFF7A22FF).copy(alpha = strokeAlpha)
-                        )
+                        Color(0xFF10B981).copy(alpha = strokeAlpha * 0.7f)
                     }
 
                     drawRoundRect(
-                        brush = Brush.linearGradient(borderGradient),
+                        color = borderColor,
                         topLeft = Offset(mappedPaddedRect.left, mappedPaddedRect.top),
                         size = Size(mappedPaddedRect.width(), mappedPaddedRect.height()),
                         cornerRadius = CornerRadius(cornerRadius, cornerRadius),
-                        style = Stroke(width = 2.5f)
+                        style = Stroke(width = 1.5f)
                     )
                 }
 
@@ -140,8 +134,7 @@ fun AutoPlateOverlay(
                     val rawW = mappedRawRect.width()
                     val rawH = mappedRawRect.height()
 
-                    val boxColor = if (isFace) Color(0xFF00E5FF) else Color(0xFF00E676)
-                    val reticleColor = if (isFace) Color(0xFF9D4EDD) else Color(0xFF00E5FF)
+                    val boxColor = if (isFace) Color(0xFF6366F1) else Color(0xFF10B981)
                     val cornerRadius = if (isFace) 8f else 4f
 
                     // Bounding box outline
@@ -150,36 +143,16 @@ fun AutoPlateOverlay(
                         topLeft = Offset(rawLeft, rawTop),
                         size = Size(rawW, rawH),
                         cornerRadius = CornerRadius(cornerRadius, cornerRadius),
-                        style = Stroke(width = 2.5f)
+                        style = Stroke(width = 2.0f)
                     )
-
-                    // Corner reticle accents for high-tech CV tracking visual
-                    val reticleLen = (rawW.coerceAtMost(rawH) * 0.25f).coerceIn(8f, 22f)
-                    val reticleStroke = Stroke(width = 3.5f)
-
-                    // Top-Left corner
-                    drawLine(reticleColor, Offset(rawLeft, rawTop), Offset(rawLeft + reticleLen, rawTop), reticleStroke.width)
-                    drawLine(reticleColor, Offset(rawLeft, rawTop), Offset(rawLeft, rawTop + reticleLen), reticleStroke.width)
-
-                    // Top-Right corner
-                    drawLine(reticleColor, Offset(rawRight, rawTop), Offset(rawRight - reticleLen, rawTop), reticleStroke.width)
-                    drawLine(reticleColor, Offset(rawRight, rawTop), Offset(rawRight, rawTop - reticleLen), reticleStroke.width)
-
-                    // Bottom-Left corner
-                    drawLine(reticleColor, Offset(rawLeft, rawBottom), Offset(rawLeft + reticleLen, rawBottom), reticleStroke.width)
-                    drawLine(reticleColor, Offset(rawLeft, rawBottom), Offset(rawLeft, rawBottom - reticleLen), reticleStroke.width)
-
-                    // Bottom-Right corner
-                    drawLine(reticleColor, Offset(rawRight, rawBottom), Offset(rawRight - reticleLen, rawBottom), reticleStroke.width)
-                    drawLine(reticleColor, Offset(rawRight, rawBottom), Offset(rawRight, rawBottom - reticleLen), reticleStroke.width)
 
                     // Padded boundary indicator
                     drawRoundRect(
-                        color = boxColor.copy(alpha = 0.45f),
+                        color = boxColor.copy(alpha = 0.35f),
                         topLeft = Offset(mappedPaddedRect.left, mappedPaddedRect.top),
                         size = Size(mappedPaddedRect.width(), mappedPaddedRect.height()),
                         cornerRadius = CornerRadius(10f, 10f),
-                        style = Stroke(width = 1.5f)
+                        style = Stroke(width = 1.0f)
                     )
 
                     // Telemetry Debug Badge Tag above the bounding box
@@ -219,7 +192,7 @@ fun AutoPlateOverlay(
                     )
                 } else if (!isTargetBlurActive) {
                     // Minimal tracking wireframe when both debug boxes & blur are off
-                    val wireColor = if (isFace) Color(0xFF00E5FF).copy(alpha = 0.45f) else Color(0xFF00E676).copy(alpha = 0.45f)
+                    val wireColor = if (isFace) Color(0xFF6366F1).copy(alpha = 0.45f) else Color(0xFF10B981).copy(alpha = 0.45f)
                     drawRoundRect(
                         color = wireColor,
                         topLeft = Offset(mappedRawRect.left, mappedRawRect.top),

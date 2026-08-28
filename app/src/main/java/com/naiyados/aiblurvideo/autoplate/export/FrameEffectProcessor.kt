@@ -3,6 +3,7 @@ package com.naiyados.aiblurvideo.autoplate.export
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
@@ -38,8 +39,34 @@ object FrameEffectProcessor {
     ): Bitmap {
         var current = source
 
-        // 1. Apply Aspect Ratio Crop first so frame coordinates match the user preview
-        if (config.aspectRatio != VideoAspectRatio.ORIGINAL) {
+        // 1. Apply Aspect Ratio Crop or Custom Draggable Crop
+        val normCrop = config.customCropRect
+        val hasCustomCrop = normCrop != null && (normCrop.left > 0.005f || normCrop.top > 0.005f || normCrop.right < 0.995f || normCrop.bottom < 0.995f)
+
+        if (hasCustomCrop && normCrop != null) {
+            val left = (normCrop.left * current.width).roundToInt().coerceIn(0, current.width - 4)
+            val top = (normCrop.top * current.height).roundToInt().coerceIn(0, current.height - 4)
+            val rawW = (normCrop.width() * current.width).roundToInt().coerceIn(8, current.width - left)
+            val rawH = (normCrop.height() * current.height).roundToInt().coerceIn(8, current.height - top)
+            val width = (rawW / 2) * 2
+            val height = (rawH / 2) * 2
+
+            if (width > 8 && height > 8) {
+                var cropped = Bitmap.createBitmap(current, left, top, width, height)
+                if (config.customCropRotation != 0f) {
+                    val matrix = Matrix().apply { postRotate(config.customCropRotation) }
+                    val rotated = Bitmap.createBitmap(cropped, 0, 0, cropped.width, cropped.height, matrix, true)
+                    if (rotated != cropped) {
+                        cropped.recycle()
+                        cropped = rotated
+                    }
+                }
+                if (current != source && current != cropped) {
+                    current.recycle()
+                }
+                current = cropped
+            }
+        } else if (config.aspectRatio != VideoAspectRatio.ORIGINAL && config.aspectRatio != VideoAspectRatio.FREEFORM) {
             val cropRect = config.aspectRatio.calculateCropRect(current.width, current.height)
             val left = cropRect.left.roundToInt().coerceIn(0, current.width - 2)
             val top = cropRect.top.roundToInt().coerceIn(0, current.height - 2)

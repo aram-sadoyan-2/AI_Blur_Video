@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
+import com.naiyados.aiblurvideo.ui.theme.LocalAppColors
 
 @Composable
 fun DetectionProgressCard(
@@ -60,6 +61,7 @@ fun DetectionProgressCard(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val appColors = LocalAppColors.current
     val percentage = (progress * 100).toInt().coerceIn(0, 100)
 
     AnimatedVisibility(
@@ -74,8 +76,8 @@ fun DetectionProgressCard(
                 .padding(horizontal = 14.dp, vertical = 4.dp)
                 .testTag("detection_progress_card"),
             shape = RoundedCornerShape(10.dp),
-            color = Color(0xEB131622),
-            border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.35f))
+            color = appColors.cardBackground,
+            border = BorderStroke(1.dp, appColors.border)
         ) {
             Column(
                 modifier = Modifier
@@ -96,13 +98,13 @@ fun DetectionProgressCard(
                         Icon(
                             imageVector = Icons.Rounded.DirectionsCar,
                             contentDescription = null,
-                            tint = Color(0xFF00E5FF),
+                            tint = appColors.primary,
                             modifier = Modifier.size(14.dp)
                         )
 
                         Text(
                             text = if (totalFrames > 0) "Scanning: $framesScanned/$totalFrames ($detectionsFound plates)" else "Scanning: $framesScanned frames ($detectionsFound plates)",
-                            color = Color.White,
+                            color = appColors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
                         )
@@ -114,7 +116,7 @@ fun DetectionProgressCard(
                     ) {
                         Text(
                             text = "$percentage%",
-                            color = Color(0xFF00E5FF),
+                            color = appColors.primary,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 12.sp,
                             modifier = Modifier.testTag("detection_progress_percentage")
@@ -146,8 +148,8 @@ fun DetectionProgressCard(
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
                         .testTag("detection_progress_bar"),
-                    color = Color(0xFF00E5FF),
-                    trackColor = Color.White.copy(alpha = 0.12f)
+                    color = appColors.primary,
+                    trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.12f) else appColors.surfaceElevated
                 )
             }
         }

@@ -303,14 +303,14 @@ fun CustomObjectTouchOverlay(
             val cx = (left + right) / 2f
             val cy = (top + bottom) / 2f
 
-            val primaryNeon = Color(0xFF00E5FF) // Cyber Cyan
-            val cyanAccent = Color(0xFF2979FF)  // Electric Blue
-            val handleFill = Color(0xFF0F172A)   // Deep Slate
-            val activeHighlight = Color(0xFF10B981) // Neon Green active halo
+            val primaryNeon = Color(0xFF6366F1) // Clean Indigo primary accent
+            val cyanAccent = Color(0xFF3B82F6)  // Clean Blue accent
+            val handleFill = Color(0xFFFFFFFF)  // Clean White handle fill
+            val activeHighlight = Color(0xFF4F46E5) // Clean Deep Indigo active indicator
 
             rotate(degrees = currentRotation, pivot = Offset(cx, cy)) {
-                // 1. Frosted Blur Simulation Core
-                val blurAlpha = (0.28f + blurStrength * 0.35f).coerceIn(0.2f, 0.75f)
+                // 1. Clean Privacy Simulation Core
+                val blurAlpha = (0.35f + blurStrength * 0.40f).coerceIn(0.25f, 0.85f)
                 val path = Path()
                 when (shape) {
                     CustomBlurShape.RECTANGLE -> {
@@ -333,57 +333,49 @@ fun CustomObjectTouchOverlay(
                     }
                 }
 
-                // Frosted Gradient Fill
+                // Semi-transparent dark blur preview mask
                 drawPath(
                     path = path,
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            cyanAccent.copy(alpha = blurAlpha * 0.35f),
-                            primaryNeon.copy(alpha = blurAlpha * 0.55f),
-                            Color(0xFF000000).copy(alpha = blurAlpha * 0.70f)
-                        ),
-                        center = Offset(cx, cy),
-                        radius = max(boxW, boxH) * 0.75f
-                    ),
+                    color = Color.Black.copy(alpha = blurAlpha * 0.65f),
                     style = Fill
                 )
 
-                // 2. Neon Dashed Border
+                // 2. Clean Dashed Selection Boundary
                 drawPath(
                     path = path,
                     color = primaryNeon,
                     style = Stroke(
-                        width = 3.5f,
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))
+                        width = 2.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))
                     )
                 )
 
-                // 3. Rotation Lollipop Handle (Stem + Circular Knob with Rotate Arrow)
+                // 3. Rotation Handle
                 val stemStartY = top
-                val stemEndY = top - 48f
+                val stemEndY = top - 44f
                 drawLine(
                     color = cyanAccent.copy(alpha = 0.85f),
                     start = Offset(cx, stemStartY),
                     end = Offset(cx, stemEndY),
-                    strokeWidth = 2.5f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
+                    strokeWidth = 2f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
                 )
 
-                // Rotation Knob Outer Glow & Body
+                // Rotation Knob Body
                 val isRotateActive = activeHandle == HandleType.ROTATE
                 drawCircle(
-                    color = if (isRotateActive) activeHighlight.copy(alpha = 0.45f) else cyanAccent.copy(alpha = 0.30f),
-                    radius = if (isRotateActive) 24f else 20f,
+                    color = if (isRotateActive) activeHighlight.copy(alpha = 0.25f) else cyanAccent.copy(alpha = 0.15f),
+                    radius = if (isRotateActive) 22f else 18f,
                     center = Offset(cx, stemEndY)
                 )
                 drawCircle(
                     color = handleFill,
-                    radius = 16f,
+                    radius = 14f,
                     center = Offset(cx, stemEndY)
                 )
                 drawCircle(
                     color = if (isRotateActive) activeHighlight else cyanAccent,
-                    radius = 16f,
+                    radius = 14f,
                     center = Offset(cx, stemEndY),
                     style = Stroke(width = 2.5f)
                 )
@@ -393,8 +385,8 @@ fun CustomObjectTouchOverlay(
                     startAngle = 40f,
                     sweepAngle = 260f,
                     useCenter = false,
-                    topLeft = Offset(cx - 7f, stemEndY - 7f),
-                    size = Size(14f, 14f),
+                    topLeft = Offset(cx - 6f, stemEndY - 6f),
+                    size = Size(12f, 12f),
                     style = Stroke(width = 2f)
                 )
 
@@ -411,8 +403,8 @@ fun CustomObjectTouchOverlay(
                 drawEdgeHandle(right, cy, isHorizontal = false, activeHandle == HandleType.EDGE_RIGHT, cyanAccent, handleFill, activeHighlight)
 
                 // 6. Corner L-Brackets
-                val bracketLen = min(22f, min(boxW, boxH) * 0.28f)
-                val strokeW = 4.5f
+                val bracketLen = min(20f, min(boxW, boxH) * 0.25f)
+                val strokeW = 3.5f
                 drawLine(cyanAccent, Offset(left, top), Offset(left + bracketLen, top), strokeW)
                 drawLine(cyanAccent, Offset(left, top), Offset(left, top + bracketLen), strokeW)
 

@@ -111,10 +111,21 @@ class AutoPlateVideoExporter(
             srcW to srcH
         }
 
-        // Calculate dimensions with aspect ratio
-        val (baseW, baseH) = if (config.aspectRatio != VideoAspectRatio.ORIGINAL) {
+        // Calculate dimensions with custom crop or aspect ratio
+        val normCrop = config.customCropRect
+        val hasCustomCrop = normCrop != null && (normCrop.left > 0.005f || normCrop.top > 0.005f || normCrop.right < 0.995f || normCrop.bottom < 0.995f)
+
+        val (baseW, baseH) = if (hasCustomCrop && normCrop != null) {
+            val cropW = (normCrop.width() * displaySrcW).roundToInt().coerceIn(16, displaySrcW)
+            val cropH = (normCrop.height() * displaySrcH).roundToInt().coerceIn(16, displaySrcH)
+            if (config.customCropRotation == 90f || config.customCropRotation == 270f) {
+                Pair((cropH / 2) * 2, (cropW / 2) * 2)
+            } else {
+                Pair((cropW / 2) * 2, (cropH / 2) * 2)
+            }
+        } else if (config.aspectRatio != VideoAspectRatio.ORIGINAL && config.aspectRatio != VideoAspectRatio.FREEFORM) {
             val crop = config.aspectRatio.calculateCropRect(displaySrcW, displaySrcH)
-            Pair(crop.width().toInt(), crop.height().toInt())
+            Pair((crop.width().toInt() / 2) * 2, (crop.height().toInt() / 2) * 2)
         } else {
             Pair(displaySrcW, displaySrcH)
         }

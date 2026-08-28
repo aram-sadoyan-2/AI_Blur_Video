@@ -50,64 +50,60 @@ data class AppColors(
 
 val DarkAppColors = AppColors(
     isDark = true,
-    background = Color(0xFF080A12),
-    surface = Color(0xFF141824),
-    surfaceVariant = Color(0xFF1B1F2E),
-    surfaceElevated = Color(0xFF22283A),
-    cardBackground = Color(0xFF181C2A),
-    border = Color.White.copy(alpha = 0.12f),
-    textPrimary = Color.White,
-    textSecondary = Color.White.copy(alpha = 0.65f),
-    textTertiary = Color.White.copy(alpha = 0.40f),
-    primary = Color(0xFF00E5FF),
-    secondary = Color(0xFF2979FF),
-    accentPink = Color(0xFF00E5FF),
+    background = Color(0xFF0F172A),
+    surface = Color(0xFF1E293B),
+    surfaceVariant = Color(0xFF334155),
+    surfaceElevated = Color(0xFF273549),
+    cardBackground = Color(0xFF1E293B),
+    border = Color(0xFF334155),
+    textPrimary = Color(0xFFF8FAFC),
+    textSecondary = Color(0xFF94A3B8),
+    textTertiary = Color(0xFF64748B),
+    primary = Color(0xFF6366F1),
+    secondary = Color(0xFF0EA5E9),
+    accentPink = Color(0xFF6366F1),
     accentPurple = Color(0xFF8B5CF6),
-    accentOrange = Color(0xFFFF9E2C),
+    accentOrange = Color(0xFFF59E0B),
     accentGreen = Color(0xFF10B981),
-    accentBlue = Color(0xFF2979FF),
-    accentCyan = Color(0xFF00E5FF),
+    accentBlue = Color(0xFF3B82F6),
+    accentCyan = Color(0xFF0EA5E9),
     backgroundGradient = Brush.verticalGradient(
-        colors = listOf(Color(0xFF151827), Color(0xFF080A12))
+        colors = listOf(Color(0xFF0F172A), Color(0xFF0F172A))
     ),
     accentGradient = Brush.linearGradient(
         colors = listOf(
-            Color(0xFF00E5FF),
-            Color(0xFF2979FF),
-            Color(0xFF8B5CF6),
-            Color(0xFF00E5FF)
+            Color(0xFF4F46E5),
+            Color(0xFF6366F1)
         )
     )
 )
 
 val LightAppColors = AppColors(
     isDark = false,
-    background = Color(0xFFF3F5FA),
+    background = Color(0xFFF8FAFC),
     surface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFFE8EDF5),
-    surfaceElevated = Color(0xFFDFE6F0),
+    surfaceVariant = Color(0xFFF1F5F9),
+    surfaceElevated = Color(0xFFE2E8F0),
     cardBackground = Color(0xFFFFFFFF),
-    border = Color(0xFFDCE2EC),
-    textPrimary = Color(0xFF101426),
-    textSecondary = Color(0xFF556075),
-    textTertiary = Color(0xFF8692A6),
-    primary = Color(0xFF0066FF),
+    border = Color(0xFFE2E8F0),
+    textPrimary = Color(0xFF0F172A),
+    textSecondary = Color(0xFF64748B),
+    textTertiary = Color(0xFF94A3B8),
+    primary = Color(0xFF4F46E5),
     secondary = Color(0xFF0284C7),
-    accentPink = Color(0xFF0066FF),
+    accentPink = Color(0xFF4F46E5),
     accentPurple = Color(0xFF7C3AED),
-    accentOrange = Color(0xFFFF9E2C),
-    accentGreen = Color(0xFF10B981),
-    accentBlue = Color(0xFF0066FF),
+    accentOrange = Color(0xFFD97706),
+    accentGreen = Color(0xFF059669),
+    accentBlue = Color(0xFF2563EB),
     accentCyan = Color(0xFF0284C7),
     backgroundGradient = Brush.verticalGradient(
-        colors = listOf(Color(0xFFFFFFFF), Color(0xFFEBF0F8))
+        colors = listOf(Color(0xFFF8FAFC), Color(0xFFF8FAFC))
     ),
     accentGradient = Brush.linearGradient(
         colors = listOf(
-            Color(0xFF0066FF),
-            Color(0xFF0284C7),
-            Color(0xFF7C3AED),
-            Color(0xFF0066FF)
+            Color(0xFF4F46E5),
+            Color(0xFF4338CA)
         )
     )
 )

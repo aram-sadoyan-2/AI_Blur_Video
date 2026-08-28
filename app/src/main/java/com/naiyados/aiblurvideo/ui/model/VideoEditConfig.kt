@@ -19,6 +19,8 @@ data class VideoEditConfig(
     val trimStartMs: Long = 0L,
     val trimEndMs: Long = 0L, // 0L means full video
     val aspectRatio: VideoAspectRatio = VideoAspectRatio.ORIGINAL,
+    val customCropRect: RectF? = null, // Normalized 0..1 crop window
+    val customCropRotation: Float = 0f,
     val customObjectNormalizedRect: RectF? = null, // Normalized 0..1 coordinates for custom object box
     val customObjectRotationDegrees: Float = 0f,
     val customObjectShape: CustomBlurShape = CustomBlurShape.ROUNDED_RECT,
@@ -32,6 +34,8 @@ data class VideoEditConfig(
                 trimStartMs > 0L ||
                 trimEndMs > 0L ||
                 aspectRatio != VideoAspectRatio.ORIGINAL ||
+                (customCropRect != null && (customCropRect.left > 0.001f || customCropRect.top > 0.001f || customCropRect.right < 0.999f || customCropRect.bottom < 0.999f)) ||
+                customCropRotation != 0f ||
                 customObjectNormalizedRect != null ||
                 customObjectRotationDegrees != 0f ||
                 isMuted

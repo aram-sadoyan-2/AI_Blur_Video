@@ -86,11 +86,7 @@ fun ThemeSelectionDialog(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(AiBlurColors.Pink, AiBlurColors.Purple)
-                                    )
-                                ),
+                                .background(appColors.primary.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -100,7 +96,7 @@ fun ThemeSelectionDialog(
                                     AppThemeMode.SYSTEM -> Icons.Rounded.SettingsBrightness
                                 },
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = appColors.primary,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -113,7 +109,7 @@ fun ThemeSelectionDialog(
                                 fontSize = 18.sp
                             )
                             Text(
-                                text = "OLED Dark Mode saves battery during export",
+                                text = "Dark Mode saves battery during export",
                                 color = appColors.textSecondary,
                                 fontSize = 12.sp
                             )
@@ -147,10 +143,10 @@ fun ThemeSelectionDialog(
                                 ThemeManager.setThemeMode(mode)
                             },
                             shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) AiBlurColors.Pink.copy(alpha = if (appColors.isDark) 0.16f else 0.10f) else appColors.surfaceVariant.copy(alpha = 0.5f),
+                            color = if (isSelected) appColors.primary.copy(alpha = if (appColors.isDark) 0.16f else 0.10f) else appColors.surfaceVariant.copy(alpha = 0.5f),
                             border = BorderStroke(
                                 width = 1.dp,
-                                color = if (isSelected) AiBlurColors.Pink else appColors.border
+                                color = if (isSelected) appColors.primary else appColors.border
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -168,7 +164,7 @@ fun ThemeSelectionDialog(
                                         .size(36.dp)
                                         .clip(CircleShape)
                                         .background(
-                                            if (isSelected) AiBlurColors.Pink.copy(alpha = 0.2f)
+                                            if (isSelected) appColors.primary.copy(alpha = 0.2f)
                                             else appColors.surfaceElevated
                                         ),
                                     contentAlignment = Alignment.Center
@@ -176,7 +172,7 @@ fun ThemeSelectionDialog(
                                     Icon(
                                         imageVector = icon,
                                         contentDescription = null,
-                                        tint = if (isSelected) AiBlurColors.Pink else appColors.textSecondary,
+                                        tint = if (isSelected) appColors.primary else appColors.textSecondary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -200,7 +196,7 @@ fun ThemeSelectionDialog(
                                         modifier = Modifier
                                             .size(22.dp)
                                             .clip(CircleShape)
-                                            .background(AiBlurColors.Pink),
+                                            .background(appColors.primary),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -252,7 +248,7 @@ fun ThemeSelectionDialog(
                         .height(44.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AiBlurColors.Pink
+                        containerColor = appColors.primary
                     )
                 ) {
                     Text(

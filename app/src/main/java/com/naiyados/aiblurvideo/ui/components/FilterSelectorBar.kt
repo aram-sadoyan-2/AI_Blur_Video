@@ -202,13 +202,13 @@ fun FilterSelectorBar(
 
 private fun getFilterGradient(filter: VideoFilter): Brush {
     return when (filter) {
-        VideoFilter.NONE -> Brush.linearGradient(listOf(Color(0xFF333333), Color(0xFF555555)))
-        VideoFilter.CINEMATIC -> Brush.linearGradient(listOf(Color(0xFF0083B0), Color(0xFF00B4DB), Color(0xFFFF8008)))
-        VideoFilter.NOIR -> Brush.linearGradient(listOf(Color(0xFF111111), Color(0xFF888888), Color(0xFFEEEEEE)))
-        VideoFilter.CYBERPUNK -> Brush.linearGradient(listOf(Color(0xFFFF007F), Color(0xFF7928CA), Color(0xFF00DFD8)))
-        VideoFilter.VINTAGE -> Brush.linearGradient(listOf(Color(0xFFF2994A), Color(0xFFF2C94C), Color(0xFFBB6BD9)))
-        VideoFilter.COOL_ICE -> Brush.linearGradient(listOf(Color(0xFF2BC0E4), Color(0xFFEAECC6)))
-        VideoFilter.NIGHT_VISION -> Brush.linearGradient(listOf(Color(0xFF003300), Color(0xFF00E676), Color(0xFF11998E)))
-        VideoFilter.SEPIA -> Brush.linearGradient(listOf(Color(0xFF704214), Color(0xFFD2B48C), Color(0xFFFFF8DC)))
+        VideoFilter.NONE -> Brush.linearGradient(listOf(Color(0xFF475569), Color(0xFF64748B)))
+        VideoFilter.CINEMATIC -> Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFFD97706)))
+        VideoFilter.NOIR -> Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF64748B), Color(0xFFE2E8F0)))
+        VideoFilter.VIBRANT -> Brush.linearGradient(listOf(Color(0xFF4F46E5), Color(0xFF0EA5E9), Color(0xFF10B981)))
+        VideoFilter.VINTAGE -> Brush.linearGradient(listOf(Color(0xFFD97706), Color(0xFFF59E0B), Color(0xFFB45309)))
+        VideoFilter.COOL_ICE -> Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFFE0F2FE)))
+        VideoFilter.NIGHT_VISION -> Brush.linearGradient(listOf(Color(0xFF064E3B), Color(0xFF10B981)))
+        VideoFilter.SEPIA -> Brush.linearGradient(listOf(Color(0xFF78350F), Color(0xFFD97706), Color(0xFFFEF3C7)))
     }
 }

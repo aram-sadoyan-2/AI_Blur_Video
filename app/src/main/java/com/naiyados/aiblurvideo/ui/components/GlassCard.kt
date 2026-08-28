@@ -20,13 +20,13 @@ fun GlassCard(
     val appColors = LocalAppColors.current
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (appColors.isDark) Color.White.copy(alpha = 0.07f) else appColors.surface
+            containerColor = appColors.cardBackground
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = if (appColors.isDark) Color.White.copy(alpha = 0.12f) else appColors.border
+            color = appColors.border
         )
     ) {
         Column(content = content)

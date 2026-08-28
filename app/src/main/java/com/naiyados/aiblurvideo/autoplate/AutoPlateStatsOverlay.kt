@@ -81,9 +81,9 @@ fun AutoPlateStatsOverlay(
 
     val latencyColor = when {
         stats.latencyMs == 0L -> Color.White.copy(alpha = 0.6f)
-        stats.latencyMs <= 35L -> Color(0xFF00E676) // Excellent green
-        stats.latencyMs <= 70L -> Color(0xFFFFD54F) // Yellow warning
-        else -> Color(0xFFFF7043) // Orange / High latency
+        stats.latencyMs <= 35L -> Color(0xFF10B981) // Emerald
+        stats.latencyMs <= 70L -> Color(0xFFF59E0B) // Amber
+        else -> Color(0xFFEF4444) // Red
     }
 
     Surface(
@@ -91,10 +91,10 @@ fun AutoPlateStatsOverlay(
             .testTag("inference_stats_overlay")
             .clip(RoundedCornerShape(8.dp)),
         shape = RoundedCornerShape(8.dp),
-        color = Color(0xCC0D111A), // Sleek deep glass background
+        color = Color(0xDD0F172A),
         border = BorderStroke(
-            width = 0.8.dp,
-            color = if (stats.detectedCount > 0) Color(0xFF00E5FF).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.15f)
+            width = 1.dp,
+            color = if (stats.detectedCount > 0) Color(0xFF6366F1).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.15f)
         )
     ) {
         Column(
@@ -114,14 +114,14 @@ fun AutoPlateStatsOverlay(
                         .size(6.dp)
                         .alpha(if (stats.isLiveTracking) pulseAlpha else 0.5f)
                         .background(
-                            color = if (stats.isLiveTracking) Color(0xFF00E676) else Color.White.copy(alpha = 0.5f),
+                            color = if (stats.isLiveTracking) Color(0xFF10B981) else Color.White.copy(alpha = 0.5f),
                             shape = CircleShape
                         )
                 )
 
                 Text(
-                    text = if (stats.detectedCount > 0) "AI ⚡ ${stats.detectedCount} plate${if (stats.detectedCount > 1) "s" else ""}" else "AI SCAN",
-                    color = if (stats.detectedCount > 0) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.8f),
+                    text = if (stats.detectedCount > 0) "AI • ${stats.detectedCount} plate${if (stats.detectedCount > 1) "s" else ""}" else "AI SCAN",
+                    color = if (stats.detectedCount > 0) Color(0xFF818CF8) else Color.White.copy(alpha = 0.8f),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -163,7 +163,7 @@ fun AutoPlateStatsOverlay(
                         Icon(
                             imageVector = Icons.Rounded.DirectionsCar,
                             contentDescription = null,
-                            tint = if (stats.detectedCount > 0) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.5f),
+                            tint = if (stats.detectedCount > 0) Color(0xFF818CF8) else Color.White.copy(alpha = 0.5f),
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
@@ -174,7 +174,7 @@ fun AutoPlateStatsOverlay(
                         )
                         Text(
                             text = "${stats.detectedCount}",
-                            color = if (stats.detectedCount > 0) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.6f),
+                            color = if (stats.detectedCount > 0) Color(0xFF818CF8) else Color.White.copy(alpha = 0.6f),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,

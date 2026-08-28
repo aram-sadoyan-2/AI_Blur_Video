@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -75,18 +76,53 @@ fun VideoPreviewPanel(
     filterIntensity: Float = 1.0f,
     pixelateBlockSize: Int = 24,
     aspectRatio: VideoAspectRatio = VideoAspectRatio.ORIGINAL,
+    customCropRect: RectF? = null,
+    customCropRotation: Float = 0f,
+    onCropRectChange: (RectF) -> Unit = {},
+    onCropRotationChange: (Float) -> Unit = {},
+    onResetCrop: () -> Unit = {},
     customObjectNormalizedRect: RectF? = null,
     customObjectRotationDegrees: Float = 0f,
     customObjectShape: com.naiyados.aiblurvideo.ui.model.CustomBlurShape = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT,
     onCustomObjectRectChange: (RectF) -> Unit = {},
     onCustomObjectRotationChange: (Float) -> Unit = {}
 ) {
+    var rawVideoWidth by remember { mutableIntStateOf(player?.videoSize?.width?.takeIf { it > 0 } ?: 1080) }
+    var rawVideoHeight by remember { mutableIntStateOf(player?.videoSize?.height?.takeIf { it > 0 } ?: 1920) }
+
+    DisposableEffect(player) {
+        if (player == null) return@DisposableEffect onDispose {}
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    rawVideoWidth = videoSize.width
+                    rawVideoHeight = videoSize.height
+                }
+            }
+        }
+        player.addListener(listener)
+        if (player.videoSize.width > 0 && player.videoSize.height > 0) {
+            rawVideoWidth = player.videoSize.width
+            rawVideoHeight = player.videoSize.height
+        }
+        onDispose {
+            player.removeListener(listener)
+        }
+    }
+
     val blurRadiusPx = when (selectedMode) {
         BlurMode.FullBlur -> if (blurStrength > 0.02f) (blurStrength * 90f).coerceIn(4f, 180f) else 0f
         else -> 0f
     }
 
-    val previewRatio = aspectRatio.ratioValue ?: (9f / 16f)
+    val naturalVideoRatio = if (rawVideoWidth > 0 && rawVideoHeight > 0) {
+        rawVideoWidth.toFloat() / rawVideoHeight.toFloat()
+    } else {
+        9f / 16f
+    }
+
+    val previewRatio = if (selectedMode == BlurMode.Crop) naturalVideoRatio else (aspectRatio.ratioValue ?: naturalVideoRatio)
+    val isCropToFill = (selectedMode != BlurMode.Crop && aspectRatio != VideoAspectRatio.ORIGINAL)
 
     val effectiveScrubBitmap = remember(scrubPreviewBitmap, selectedMode, blurStrength) {
         if (scrubPreviewBitmap != null && selectedMode == BlurMode.FullBlur && blurStrength > 0.05f) {
@@ -155,7 +191,8 @@ fun VideoPreviewPanel(
                         player = player,
                         blurRadiusPx = blurRadiusPx,
                         selectedFilter = selectedFilter,
-                        filterIntensity = filterIntensity
+                        filterIntensity = filterIntensity,
+                        cropToFill = isCropToFill
                     )
 
                     if (effectiveScrubBitmap != null) {
@@ -163,7 +200,7 @@ fun VideoPreviewPanel(
                             bitmap = effectiveScrubBitmap.asImageBitmap(),
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
+                            contentScale = if (isCropToFill) ContentScale.Crop else ContentScale.Fit
                         )
                     }
                 }
@@ -193,6 +230,21 @@ fun VideoPreviewPanel(
                         blurStrength = blurStrength,
                         onRectChanged = onCustomObjectRectChange,
                         onRotationChanged = onCustomObjectRotationChange,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // Active Draggable Zoomable Crop Transform Overlay
+                if (selectedMode == BlurMode.Crop) {
+                    CropTransformTouchOverlay(
+                        cropRect = customCropRect,
+                        rotationDegrees = customCropRotation,
+                        videoWidth = rawVideoWidth,
+                        videoHeight = rawVideoHeight,
+                        aspectRatio = aspectRatio,
+                        onCropRectChanged = onCropRectChange,
+                        onRotationChanged = onCropRotationChange,
+                        onResetCrop = onResetCrop,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -263,7 +315,8 @@ fun PlayerTextureViewFit(
     player: Player,
     blurRadiusPx: Float = 0f,
     selectedFilter: VideoFilter = VideoFilter.NONE,
-    filterIntensity: Float = 1.0f
+    filterIntensity: Float = 1.0f,
+    cropToFill: Boolean = false
 ) {
     var textureViewRef by remember {
         mutableStateOf<TextureView?>(null)
@@ -296,10 +349,11 @@ fun PlayerTextureViewFit(
             val currentTexture = textureViewRef ?: container.getChildAt(0) as? TextureView
             currentTexture?.let { texture ->
                 player.setVideoTextureView(texture)
-                applyFitMatrix(
+                applyVideoTransformMatrix(
                     view = texture,
                     videoWidth = player.videoSize.width,
-                    videoHeight = player.videoSize.height
+                    videoHeight = player.videoSize.height,
+                    cropToFill = cropToFill
                 )
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -334,14 +388,15 @@ fun PlayerTextureViewFit(
         }
     )
 
-    DisposableEffect(player) {
+    DisposableEffect(player, cropToFill) {
         val listener = object : Player.Listener {
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 textureViewRef?.let { texture ->
-                    applyFitMatrix(
+                    applyVideoTransformMatrix(
                         view = texture,
                         videoWidth = videoSize.width,
-                        videoHeight = videoSize.height
+                        videoHeight = videoSize.height,
+                        cropToFill = cropToFill
                     )
                 }
             }
@@ -350,10 +405,11 @@ fun PlayerTextureViewFit(
         player.addListener(listener)
 
         textureViewRef?.let { texture ->
-            applyFitMatrix(
+            applyVideoTransformMatrix(
                 view = texture,
                 videoWidth = player.videoSize.width,
-                videoHeight = player.videoSize.height
+                videoHeight = player.videoSize.height,
+                cropToFill = cropToFill
             )
         }
 
@@ -364,10 +420,11 @@ fun PlayerTextureViewFit(
     }
 }
 
-private fun applyFitMatrix(
+private fun applyVideoTransformMatrix(
     view: TextureView,
     videoWidth: Int,
-    videoHeight: Int
+    videoHeight: Int,
+    cropToFill: Boolean
 ) {
     val viewWidth = view.width.toFloat()
     val viewHeight = view.height.toFloat()
@@ -379,15 +436,27 @@ private fun applyFitMatrix(
     val viewAspect = viewWidth / viewHeight
     val videoAspect = videoWidth.toFloat() / videoHeight.toFloat()
 
-    var scaleX = 1f
-    var scaleY = 1f
+    val scaleX: Float
+    val scaleY: Float
 
-    if (videoAspect > viewAspect) {
-        scaleX = 1f
-        scaleY = viewAspect / videoAspect
+    if (cropToFill) {
+        // CROP TO FILL (Center Crop): Fill entire viewport with video without black borders
+        if (videoAspect > viewAspect) {
+            scaleX = videoAspect / viewAspect
+            scaleY = 1f
+        } else {
+            scaleX = 1f
+            scaleY = viewAspect / videoAspect
+        }
     } else {
-        scaleX = videoAspect / viewAspect
-        scaleY = 1f
+        // FIT: Fit within viewport
+        if (videoAspect > viewAspect) {
+            scaleX = 1f
+            scaleY = viewAspect / videoAspect
+        } else {
+            scaleX = videoAspect / viewAspect
+            scaleY = 1f
+        }
     }
 
     val matrix = Matrix()

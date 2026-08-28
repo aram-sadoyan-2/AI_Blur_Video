@@ -51,22 +51,20 @@ object AiBlurColors {
         @ReadOnlyComposable
         get() = LocalAppColors.current.primary
 
-    val ElectricCyan = Color(0xFF00E5FF)
-    val ElectricBlue = Color(0xFF2979FF)
-    val Cobalt = Color(0xFF0066FF)
-    val Pink = Color(0xFF00E5FF) // Replaced with modern Electric Cyan
-    val Orange = Color(0xFFFF9E2C)
-    val Purple = Color(0xFF8B5CF6)
-    val Blue = Color(0xFF2979FF)
-    val Cyan = Color(0xFF00E5FF)
+    val ElectricCyan = Color(0xFF0EA5E9)
+    val ElectricBlue = Color(0xFF4F46E5)
+    val Cobalt = Color(0xFF4F46E5)
+    val Pink = Color(0xFF4F46E5)
+    val Orange = Color(0xFFF59E0B)
+    val Purple = Color(0xFF7C3AED)
+    val Blue = Color(0xFF3B82F6)
+    val Cyan = Color(0xFF0EA5E9)
     val Green = Color(0xFF10B981)
 
     val AccentGradient = Brush.linearGradient(
         colors = listOf(
-            ElectricCyan,
-            ElectricBlue,
-            Purple,
-            ElectricCyan
+            Color(0xFF4F46E5),
+            Color(0xFF6366F1)
         )
     )
 

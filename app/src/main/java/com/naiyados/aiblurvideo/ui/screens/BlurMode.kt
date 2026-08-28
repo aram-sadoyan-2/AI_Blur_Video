@@ -174,6 +174,14 @@ fun BlurMode(
         mutableStateOf(VideoAspectRatio.ORIGINAL)
     }
 
+    var customCropRect by remember {
+        mutableStateOf<RectF?>(RectF(0.05f, 0.05f, 0.95f, 0.95f))
+    }
+
+    var customCropRotation by remember {
+        mutableFloatStateOf(0f)
+    }
+
     var customObjectRect by remember {
         mutableStateOf<RectF?>(RectF(0.25f, 0.30f, 0.75f, 0.70f))
     }
@@ -315,7 +323,11 @@ fun BlurMode(
             trimStartMs = trimStartMs,
             trimEndMs = trimEndMs,
             aspectRatio = selectedAspectRatio,
+            customCropRect = customCropRect,
+            customCropRotation = customCropRotation,
             customObjectNormalizedRect = customObjectRect,
+            customObjectRotationDegrees = customObjectRotation,
+            customObjectShape = customObjectShape,
             isMuted = isMuted,
             exportSettings = exportSettings
         )
@@ -344,7 +356,11 @@ fun BlurMode(
         trimStartMs = config.trimStartMs
         trimEndMs = config.trimEndMs
         selectedAspectRatio = config.aspectRatio
+        customCropRect = config.customCropRect
+        customCropRotation = config.customCropRotation
         customObjectRect = config.customObjectNormalizedRect
+        customObjectRotation = config.customObjectRotationDegrees
+        customObjectShape = config.customObjectShape
         isMuted = config.isMuted
         exportSettings = config.exportSettings
     }
@@ -548,6 +564,8 @@ fun BlurMode(
                         trimStartMs = trimStartMs,
                         trimEndMs = trimEndMs,
                         aspectRatio = selectedAspectRatio,
+                        customCropRect = customCropRect,
+                        customCropRotation = customCropRotation,
                         customObjectNormalizedRect = customObjectRect,
                         customObjectRotationDegrees = customObjectRotation,
                         customObjectShape = customObjectShape,
@@ -657,6 +675,22 @@ fun BlurMode(
                 filterIntensity = filterIntensity,
                 pixelateBlockSize = pixelateBlockSize,
                 aspectRatio = selectedAspectRatio,
+                customCropRect = customCropRect,
+                customCropRotation = customCropRotation,
+                onCropRectChange = { updatedRect ->
+                    customCropRect = updatedRect
+                    selectedAspectRatio = VideoAspectRatio.FREEFORM
+                },
+                onCropRotationChange = { updatedAngle ->
+                    customCropRotation = updatedAngle
+                    selectedAspectRatio = VideoAspectRatio.FREEFORM
+                },
+                onResetCrop = {
+                    saveSnapshotForUndo()
+                    selectedAspectRatio = VideoAspectRatio.ORIGINAL
+                    customCropRect = RectF(0f, 0f, 1f, 1f)
+                    customCropRotation = 0f
+                },
                 customObjectNormalizedRect = customObjectRect,
                 customObjectRotationDegrees = customObjectRotation,
                 customObjectShape = customObjectShape,
@@ -746,7 +780,7 @@ fun BlurMode(
                         }
                     }
 
-                    // Face Blur Toggle Pill
+                    // Face Toggle Pill
                     Surface(
                         modifier = Modifier
                             .testTag("face_blur_toggle_container")
@@ -758,7 +792,7 @@ fun BlurMode(
                         color = Color.Black.copy(alpha = 0.70f),
                         border = BorderStroke(
                             width = 0.8.dp,
-                            color = if (isFaceBlurEnabled) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.2f)
+                            color = if (isFaceBlurEnabled) appColors.primary else Color.White.copy(alpha = 0.2f)
                         )
                     ) {
                         Row(
@@ -769,7 +803,7 @@ fun BlurMode(
                             Icon(
                                 imageVector = Icons.Rounded.Face,
                                 contentDescription = null,
-                                tint = if (isFaceBlurEnabled) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.5f),
+                                tint = if (isFaceBlurEnabled) appColors.primary else Color.White.copy(alpha = 0.5f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
@@ -801,7 +835,7 @@ fun BlurMode(
                         color = Color.Black.copy(alpha = 0.70f),
                         border = BorderStroke(
                             width = 0.8.dp,
-                            color = if (showDebugBoundingBoxes) Color(0xFF00E676) else Color.White.copy(alpha = 0.2f)
+                            color = if (showDebugBoundingBoxes) appColors.accentGreen else Color.White.copy(alpha = 0.2f)
                         )
                     ) {
                         Row(
@@ -812,12 +846,12 @@ fun BlurMode(
                             Icon(
                                 imageVector = if (showDebugBoundingBoxes) Icons.Rounded.FilterCenterFocus else Icons.Rounded.CropFree,
                                 contentDescription = null,
-                                tint = if (showDebugBoundingBoxes) Color(0xFF00E676) else Color.White.copy(alpha = 0.5f),
+                                tint = if (showDebugBoundingBoxes) appColors.accentGreen else Color.White.copy(alpha = 0.5f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = if (showDebugBoundingBoxes) "BBox" else "Off",
-                                color = if (showDebugBoundingBoxes) Color(0xFF00E676) else Color.White.copy(alpha = 0.7f),
+                                color = if (showDebugBoundingBoxes) appColors.accentGreen else Color.White.copy(alpha = 0.7f),
                                 fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -840,7 +874,7 @@ fun BlurMode(
                         color = Color.Black.copy(alpha = 0.70f),
                         border = BorderStroke(
                             width = 0.8.dp,
-                            color = if (showInferenceStats) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.2f)
+                            color = if (showInferenceStats) appColors.primary else Color.White.copy(alpha = 0.2f)
                         )
                     ) {
                         Row(
@@ -851,12 +885,12 @@ fun BlurMode(
                             Icon(
                                 imageVector = Icons.Rounded.Speed,
                                 contentDescription = null,
-                                tint = if (showInferenceStats) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.5f),
+                                tint = if (showInferenceStats) appColors.primary else Color.White.copy(alpha = 0.5f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = if (showInferenceStats) "HUD" else "Off",
-                                color = if (showInferenceStats) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.7f),
+                                color = if (showInferenceStats) appColors.primary else Color.White.copy(alpha = 0.7f),
                                 fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1222,10 +1256,29 @@ fun BlurMode(
                     }
 
                     BlurMode.Crop -> {
+                        val srcW = player.videoSize.width.takeIf { it > 0 } ?: 1080
+                        val srcH = player.videoSize.height.takeIf { it > 0 } ?: 1920
                         Column(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
+                            AspectRatioSelectorBar(
+                                selectedRatio = selectedAspectRatio,
+                                sourceWidth = srcW,
+                                sourceHeight = srcH,
+                                onRatioSelected = { newRatio ->
+                                    saveSnapshotForUndo()
+                                    selectedAspectRatio = newRatio
+                                    if (newRatio == VideoAspectRatio.ORIGINAL) {
+                                        customCropRect = RectF(0f, 0f, 1f, 1f)
+                                        customCropRotation = 0f
+                                    } else if (newRatio != VideoAspectRatio.FREEFORM) {
+                                        customCropRect = newRatio.calculateNormalizedCropRect(srcW, srcH)
+                                        customCropRotation = 0f
+                                    }
+                                }
+                            )
+
                             VideoTrimmerControl(
                                 totalDurationMs = maxOf(videoTotalDurationMs, player.duration, 5000L),
                                 trimStartMs = trimStartMs,
@@ -1234,14 +1287,6 @@ fun BlurMode(
                                     trimStartMs = start
                                     trimEndMs = end
                                     player.seekTo(start)
-                                }
-                            )
-
-                            AspectRatioSelectorBar(
-                                selectedRatio = selectedAspectRatio,
-                                onRatioSelected = {
-                                    saveSnapshotForUndo()
-                                    selectedAspectRatio = it
                                 }
                             )
                         }

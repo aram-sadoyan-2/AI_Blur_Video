@@ -26,10 +26,10 @@ enum class VideoFilter(
         title = "Noir B&W",
         description = "High contrast classic black & white"
     ),
-    CYBERPUNK(
-        id = "cyberpunk",
-        title = "Cyberpunk",
-        description = "Futuristic neon magenta & cyan"
+    VIBRANT(
+        id = "vibrant",
+        title = "Vibrant",
+        description = "Rich, vivid colors and enhanced clarity"
     ),
     VINTAGE(
         id = "vintage",
@@ -90,15 +90,20 @@ enum class VideoFilter(
                 cm.postConcat(contrastMatrix)
                 matrix.set(cm)
             }
-            CYBERPUNK -> {
-                val cm = ColorMatrix(
+            VIBRANT -> {
+                val cm = ColorMatrix()
+                cm.setSaturation(1f + 0.40f * clamped)
+                val contrast = 1f + 0.15f * clamped
+                val translate = (-0.5f * contrast + 0.5f) * 255f * clamped
+                val contrastMatrix = ColorMatrix(
                     floatArrayOf(
-                        1.35f, 0.00f, 0.20f, 0f, 25f * clamped,
-                        0.00f, 0.90f, 0.10f, 0f, -10f * clamped,
-                        0.25f, 0.10f, 1.45f, 0f, 30f * clamped,
-                        0.00f, 0.00f, 0.00f, 1f, 0f
+                        contrast, 0f, 0f, 0f, translate,
+                        0f, contrast, 0f, 0f, translate,
+                        0f, 0f, contrast, 0f, translate,
+                        0f, 0f, 0f, 1f, 0f
                     )
                 )
+                cm.postConcat(contrastMatrix)
                 matrix.set(cm)
             }
             VINTAGE -> {
