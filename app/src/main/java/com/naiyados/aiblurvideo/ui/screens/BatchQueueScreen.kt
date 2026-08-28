@@ -15,11 +15,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -77,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.queue.BatchQueueManager
 import com.naiyados.aiblurvideo.queue.QueueItemStatus
 import com.naiyados.aiblurvideo.queue.QueueVideoItem
+import com.naiyados.aiblurvideo.ui.components.BatchVideoPreviewDialog
 import com.naiyados.aiblurvideo.ui.components.ExportSettingsDialog
 import com.naiyados.aiblurvideo.ui.components.ThemeSelectionDialog
 import com.naiyados.aiblurvideo.ui.theme.AiBlurColors
@@ -95,6 +100,8 @@ fun BatchQueueScreen(
     val context = LocalContext.current
     val appColors = LocalAppColors.current
     val themeMode by ThemeManager.themeMode.collectAsState()
+    val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val items by BatchQueueManager.queueItems.collectAsState()
     val isProcessing by BatchQueueManager.isProcessing.collectAsState()
@@ -103,6 +110,7 @@ fun BatchQueueScreen(
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var previewVideoItem by remember { mutableStateOf<QueueVideoItem?>(null) }
 
     val multipleVideoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -145,7 +153,12 @@ fun BatchQueueScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(
+                        start = 14.dp,
+                        end = 14.dp,
+                        top = topPadding + 8.dp,
+                        bottom = 12.dp
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -176,8 +189,9 @@ fun BatchQueueScreen(
                             text = if (totalCount == 0) "Queue empty"
                             else if (isProcessing) "Processing ($completedCount/$totalCount completed)"
                             else "$totalCount videos ($completedCount completed, $pendingCount waiting)",
-                            color = if (isProcessing) AiBlurColors.Pink else appColors.textSecondary,
-                            fontSize = 12.sp
+                            color = if (isProcessing) appColors.primary else appColors.textSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = if (isProcessing) FontWeight.SemiBold else FontWeight.Normal
                         )
                     }
                 }
@@ -197,7 +211,7 @@ fun BatchQueueScreen(
                         Icon(
                             imageVector = themeIcon,
                             contentDescription = "Theme Toggle",
-                            tint = if (appColors.isDark) AiBlurColors.Purple else AiBlurColors.Orange,
+                            tint = if (appColors.isDark) appColors.primary else AiBlurColors.Orange,
                             modifier = Modifier.padding(8.dp)
                         )
                     }
@@ -256,8 +270,8 @@ fun BatchQueueScreen(
                         Column {
                             Text(
                                 text = if (isProcessing) "Sequential Processing Active" else "Queue Ready",
-                                color = appColors.textPrimary,
-                                fontWeight = FontWeight.SemiBold,
+                                color = if (isProcessing) appColors.primary else appColors.textPrimary,
+                                fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
                             Text(
@@ -269,9 +283,9 @@ fun BatchQueueScreen(
 
                         Text(
                             text = "${(overallProgress * 100).toInt()}%",
-                            color = AiBlurColors.Pink,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            color = appColors.primary,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 17.sp
                         )
                     }
 
@@ -281,22 +295,23 @@ fun BatchQueueScreen(
                             .fillMaxWidth()
                             .height(6.dp)
                             .clip(RoundedCornerShape(3.dp)),
-                        color = AiBlurColors.Pink,
-                        trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.1f) else appColors.surfaceVariant
+                        color = appColors.primary,
+                        trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.12f) else appColors.surfaceVariant
                     )
 
                     // Control Buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isProcessing) {
                             OutlinedButton(
                                 onClick = { BatchQueueManager.stopProcessing() },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1.15f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
                                 shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.4f)),
+                                border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.5f)),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF5252))
                             ) {
                                 Icon(
@@ -304,8 +319,14 @@ fun BatchQueueScreen(
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "Stop Processing", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Stop Processing",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         } else {
                             Button(
@@ -316,28 +337,34 @@ fun BatchQueueScreen(
                                         Toast.makeText(context, "All videos already completed or queue is empty", Toast.LENGTH_SHORT).show()
                                     }
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1.15f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AiBlurColors.Pink)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = appColors.primary,
+                                    contentColor = if (appColors.isDark) Color.Black else Color.White
+                                )
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.PlayArrow,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = if (pendingCount > 0) "Start Queue ($pendingCount)" else "Queue Done",
-                                    fontSize = 13.sp,
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
 
                         OutlinedButton(
                             onClick = { multipleVideoPicker.launch("video/*") },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(0.95f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, appColors.border)
                         ) {
@@ -347,8 +374,14 @@ fun BatchQueueScreen(
                                 tint = appColors.textPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Add Videos", fontSize = 13.sp, color = appColors.textPrimary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Add Videos",
+                                fontSize = 12.5.sp,
+                                color = appColors.textPrimary,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -360,7 +393,7 @@ fun BatchQueueScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(32.dp),
+                    .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = bottomPadding + 24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -374,8 +407,8 @@ fun BatchQueueScreen(
                             .background(
                                 Brush.linearGradient(
                                     listOf(
-                                        AiBlurColors.Pink.copy(alpha = 0.2f),
-                                        AiBlurColors.Purple.copy(alpha = 0.2f)
+                                        appColors.primary.copy(alpha = 0.2f),
+                                        appColors.secondary.copy(alpha = 0.2f)
                                     )
                                 )
                             ),
@@ -384,7 +417,7 @@ fun BatchQueueScreen(
                         Icon(
                             imageVector = Icons.Rounded.Videocam,
                             contentDescription = null,
-                            tint = AiBlurColors.Pink,
+                            tint = appColors.primary,
                             modifier = Modifier.size(40.dp)
                         )
                     }
@@ -411,7 +444,10 @@ fun BatchQueueScreen(
                     Button(
                         onClick = { multipleVideoPicker.launch("video/*") },
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AiBlurColors.Pink),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = appColors.primary,
+                            contentColor = if (appColors.isDark) Color.Black else Color.White
+                        ),
                         modifier = Modifier.fillMaxWidth(0.85f)
                     ) {
                         Icon(
@@ -423,8 +459,7 @@ fun BatchQueueScreen(
                         Text(
                             text = "Select Multiple Videos",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -432,14 +467,19 @@ fun BatchQueueScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 14.dp,
+                    bottom = bottomPadding + 24.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(items, key = { it.id }) { item ->
                     QueueItemCard(
                         item = item,
                         isCurrentActive = item.id == currentProcessingId,
-                        onOpen = { onOpenVideo(item.savedUri ?: item.uri) },
+                        onOpen = { previewVideoItem = item },
                         onShare = {
                             (item.savedUri ?: item.uri).let { uri ->
                                 ShareHelper.shareVideo(
@@ -456,6 +496,19 @@ fun BatchQueueScreen(
                 }
             }
         }
+    }
+
+    if (previewVideoItem != null) {
+        val item = previewVideoItem!!
+        BatchVideoPreviewDialog(
+            videoUri = item.savedUri ?: item.uri,
+            videoTitle = item.name,
+            onDismissRequest = { previewVideoItem = null },
+            onOpenInStudio = { uri ->
+                previewVideoItem = null
+                onOpenVideo(uri)
+            }
+        )
     }
 
     if (showThemeDialog) {
@@ -499,13 +552,13 @@ private fun QueueItemCard(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = if (isCurrentActive) {
-            if (appColors.isDark) Color(0xFF221D2C) else appColors.surfaceElevated
+            if (appColors.isDark) Color(0xFF161C2C) else appColors.surfaceElevated
         } else {
-            if (appColors.isDark) Color(0xFF1A1A26) else appColors.surface
+            if (appColors.isDark) Color(0xFF131622) else appColors.surface
         },
         border = BorderStroke(
             1.dp,
-            if (isCurrentActive) AiBlurColors.Pink.copy(alpha = 0.5f) else appColors.border
+            if (isCurrentActive) appColors.primary.copy(alpha = 0.6f) else appColors.border
         ),
         shadowElevation = if (appColors.isDark) 0.dp else 2.dp,
         modifier = Modifier.fillMaxWidth()
@@ -526,7 +579,7 @@ private fun QueueItemCard(
                     modifier = Modifier
                         .size(width = 80.dp, height = 55.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (appColors.isDark) Color(0xFF101016) else appColors.surfaceVariant)
+                        .background(if (appColors.isDark) Color(0xFF0D0F18) else appColors.surfaceVariant)
                 ) {
                     if (thumbnailBitmap != null) {
                         Image(
@@ -586,8 +639,8 @@ private fun QueueItemCard(
                     Text(
                         text = item.currentStepText,
                         color = if (item.status == QueueItemStatus.FAILED) Color(0xFFFF5252)
-                        else if (item.status == QueueItemStatus.COMPLETED) Color(0xFF4CAF50)
-                        else if (isCurrentActive) AiBlurColors.Pink
+                        else if (item.status == QueueItemStatus.COMPLETED) Color(0xFF10B981)
+                        else if (isCurrentActive) appColors.primary
                         else appColors.textSecondary,
                         fontSize = 11.sp,
                         maxLines = 1,
@@ -608,7 +661,7 @@ private fun QueueItemCard(
                             .fillMaxWidth()
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp)),
-                        color = AiBlurColors.Pink,
+                        color = appColors.primary,
                         trackColor = if (appColors.isDark) Color.White.copy(alpha = 0.1f) else appColors.surfaceVariant
                     )
                 }
@@ -625,25 +678,25 @@ private fun QueueItemCard(
                         Surface(
                             onClick = onOpen,
                             shape = RoundedCornerShape(8.dp),
-                            color = if (appColors.isDark) Color.White.copy(alpha = 0.08f) else appColors.surfaceElevated,
-                            border = BorderStroke(1.dp, appColors.border)
+                            color = appColors.primary.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, appColors.primary.copy(alpha = 0.4f))
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.PlayArrow,
-                                    contentDescription = "Play",
-                                    tint = appColors.textPrimary,
-                                    modifier = Modifier.size(13.dp)
+                                    contentDescription = "Preview",
+                                    tint = appColors.primary,
+                                    modifier = Modifier.size(14.dp)
                                 )
                                 Text(
                                     text = "Preview",
-                                    color = appColors.textPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    color = appColors.primary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
@@ -651,25 +704,25 @@ private fun QueueItemCard(
                         Surface(
                             onClick = onShare,
                             shape = RoundedCornerShape(8.dp),
-                            color = AiBlurColors.Pink.copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, AiBlurColors.Pink.copy(alpha = 0.4f))
+                            color = if (appColors.isDark) Color.White.copy(alpha = 0.08f) else appColors.surfaceElevated,
+                            border = BorderStroke(1.dp, appColors.border)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Share,
                                     contentDescription = "Share",
-                                    tint = if (appColors.isDark) Color.White else AiBlurColors.Pink,
+                                    tint = appColors.textPrimary,
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = "Share",
-                                    color = if (appColors.isDark) Color.White else AiBlurColors.Pink,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    color = appColors.textPrimary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
@@ -753,9 +806,9 @@ private fun StatusBadge(status: QueueItemStatus) {
             appColors.textSecondary,
             "Queued"
         )
-        QueueItemStatus.SCANNING_AI -> Triple(AiBlurColors.Purple.copy(alpha = 0.25f), Color(0xFFBA68C8), "AI Scan")
-        QueueItemStatus.BLURRING_EXPORT -> Triple(AiBlurColors.Pink.copy(alpha = 0.25f), AiBlurColors.Pink, "Exporting")
-        QueueItemStatus.COMPLETED -> Triple(Color(0xFF4CAF50).copy(alpha = 0.2f), Color(0xFF4CAF50), "Done")
+        QueueItemStatus.SCANNING_AI -> Triple(appColors.secondary.copy(alpha = 0.20f), appColors.secondary, "AI Scan")
+        QueueItemStatus.BLURRING_EXPORT -> Triple(appColors.primary.copy(alpha = 0.20f), appColors.primary, "Exporting")
+        QueueItemStatus.COMPLETED -> Triple(Color(0xFF10B981).copy(alpha = 0.2f), Color(0xFF10B981), "Done")
         QueueItemStatus.FAILED -> Triple(Color(0xFFFF5252).copy(alpha = 0.2f), Color(0xFFFF5252), "Failed")
         QueueItemStatus.CANCELLED -> Triple(Color(0xFFFF9800).copy(alpha = 0.2f), Color(0xFFFF9800), "Cancelled")
     }

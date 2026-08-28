@@ -16,10 +16,11 @@ enum class ExportBitrate(
     val bps: Int,
     val description: String
 ) {
-    HIGH("High (12 Mbps)", 12_000_000, "Highest visual fidelity, larger file"),
-    STANDARD("Standard (6 Mbps)", 6_000_000, "Recommended balanced quality"),
-    MEDIUM("Medium (3 Mbps)", 3_000_000, "Good compression, smaller file"),
-    LOW("Low (1.5 Mbps)", 1_500_000, "Maximum compression, tiny file")
+    ULTRA("Ultra (24 Mbps)", 24_000_000, "Studio-grade pristine fidelity"),
+    HIGH("High (16 Mbps)", 16_000_000, "Crystal clear HD, outstanding detail"),
+    STANDARD("Standard (12 Mbps)", 12_000_000, "Recommended crisp high-quality export"),
+    MEDIUM("Medium (8 Mbps)", 8_000_000, "Balanced compression & file size"),
+    LOW("Compact (4 Mbps)", 4_000_000, "Smaller file size for quick sharing")
 }
 
 data class ExportSettings(

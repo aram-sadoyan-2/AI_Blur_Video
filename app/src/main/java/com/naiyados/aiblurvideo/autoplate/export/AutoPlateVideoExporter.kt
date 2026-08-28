@@ -25,6 +25,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import kotlin.coroutines.coroutineContext
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 class AutoPlateVideoExporter(
     private val context: Context
@@ -86,7 +87,8 @@ class AutoPlateVideoExporter(
         }
         val targetDurationMs = max(500L, endMs - startMs)
 
-        val frameRate = 24
+        val detectedFps = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toFloatOrNull()?.roundToInt()
+        val frameRate = (detectedFps ?: 30).coerceIn(24, 60)
         // Speed affects how fast we step through the source video vs output timestamps
         val speedFactor = config.playbackSpeed.coerceIn(0.25f, 4.0f)
         val sourceStepUs = (1_000_000L / frameRate * speedFactor).toLong()
@@ -165,16 +167,8 @@ class AutoPlateVideoExporter(
                 coroutineContext.ensureActive()
 
                 val timeMs = sourceTimeUs / 1000L
-                val rawFrame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && (extractW < displaySrcW || extractH < displaySrcH)) {
-                    retriever.getScaledFrameAtTime(
-                        sourceTimeUs,
-                        MediaMetadataRetriever.OPTION_CLOSEST,
-                        extractW,
-                        extractH
-                    ) ?: retriever.getFrameAtTime(sourceTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
-                } else {
-                    retriever.getFrameAtTime(sourceTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
-                }
+                val rawFrame = retriever.getFrameAtTime(sourceTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                    ?: retriever.getFrameAtTime(sourceTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
 
                 if (rawFrame != null) {
                     val frame = VideoOrientation.toDisplayBitmap(rawFrame, rotation)

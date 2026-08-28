@@ -59,23 +59,23 @@ val DarkAppColors = AppColors(
     textPrimary = Color.White,
     textSecondary = Color.White.copy(alpha = 0.65f),
     textTertiary = Color.White.copy(alpha = 0.40f),
-    primary = Color(0xFFFF5FA2),
-    secondary = Color(0xFFC86BFF),
-    accentPink = Color(0xFFFF5FA2),
-    accentPurple = Color(0xFFC86BFF),
+    primary = Color(0xFF00E5FF),
+    secondary = Color(0xFF2979FF),
+    accentPink = Color(0xFF00E5FF),
+    accentPurple = Color(0xFF8B5CF6),
     accentOrange = Color(0xFFFF9E2C),
-    accentGreen = Color(0xFF00E676),
-    accentBlue = Color(0xFF7AA8FF),
+    accentGreen = Color(0xFF10B981),
+    accentBlue = Color(0xFF2979FF),
     accentCyan = Color(0xFF00E5FF),
     backgroundGradient = Brush.verticalGradient(
         colors = listOf(Color(0xFF151827), Color(0xFF080A12))
     ),
     accentGradient = Brush.linearGradient(
         colors = listOf(
-            Color(0xFFFF5FA2),
-            Color(0xFFFF9E2C),
-            Color(0xFFC86BFF),
-            Color(0xFF7AA8FF)
+            Color(0xFF00E5FF),
+            Color(0xFF2979FF),
+            Color(0xFF8B5CF6),
+            Color(0xFF00E5FF)
         )
     )
 )
@@ -91,23 +91,23 @@ val LightAppColors = AppColors(
     textPrimary = Color(0xFF101426),
     textSecondary = Color(0xFF556075),
     textTertiary = Color(0xFF8692A6),
-    primary = Color(0xFFE02E7A),
-    secondary = Color(0xFF9932CC),
-    accentPink = Color(0xFFFF5FA2),
-    accentPurple = Color(0xFFC86BFF),
+    primary = Color(0xFF0066FF),
+    secondary = Color(0xFF0284C7),
+    accentPink = Color(0xFF0066FF),
+    accentPurple = Color(0xFF7C3AED),
     accentOrange = Color(0xFFFF9E2C),
-    accentGreen = Color(0xFF00C853),
-    accentBlue = Color(0xFF2979FF),
-    accentCyan = Color(0xFF00B8D4),
+    accentGreen = Color(0xFF10B981),
+    accentBlue = Color(0xFF0066FF),
+    accentCyan = Color(0xFF0284C7),
     backgroundGradient = Brush.verticalGradient(
         colors = listOf(Color(0xFFFFFFFF), Color(0xFFEBF0F8))
     ),
     accentGradient = Brush.linearGradient(
         colors = listOf(
-            Color(0xFFFF5FA2),
-            Color(0xFFFF9E2C),
-            Color(0xFFC86BFF),
-            Color(0xFF7AA8FF)
+            Color(0xFF0066FF),
+            Color(0xFF0284C7),
+            Color(0xFF7C3AED),
+            Color(0xFF0066FF)
         )
     )
 )

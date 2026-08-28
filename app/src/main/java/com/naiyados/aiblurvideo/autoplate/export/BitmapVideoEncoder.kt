@@ -32,8 +32,33 @@ internal class BitmapVideoEncoder(
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
             setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            // Configure VBR and high profile for crisp, artifact-free encoding
+            try {
+                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            } catch (_: Throwable) {}
+            try {
+                setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh)
+                setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel41)
+            } catch (_: Throwable) {}
+            try {
+                setInteger(MediaFormat.KEY_COMPLEXITY, 2)
+            } catch (_: Throwable) {}
+            try {
+                setInteger(MediaFormat.KEY_PRIORITY, 0)
+            } catch (_: Throwable) {}
         }
-        codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        try {
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        } catch (e: Exception) {
+            // Fallback for devices that don't support AVC High profile at this resolution
+            val fallbackFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+                setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
+                setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            }
+            codec.configure(fallbackFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        }
         inputSurface = codec.createInputSurface()
         codec.start()
     }
@@ -41,7 +66,10 @@ internal class BitmapVideoEncoder(
     fun encodeFrame(bitmap: Bitmap, presentationTimeUs: Long) {
         val canvas = inputSurface.lockHardwareCanvas()
         try {
-            val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+            val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+                isFilterBitmap = true
+                isDither = true
+            }
             if (bitmap.width == width && bitmap.height == height) {
                 canvas.drawBitmap(bitmap, 0f, 0f, paint)
             } else {

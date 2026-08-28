@@ -20,13 +20,13 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkM3ColorScheme = darkColorScheme(
-    primary = Color(0xFFFF5FA2),
-    secondary = Color(0xFFC86BFF),
+    primary = Color(0xFF00E5FF),
+    secondary = Color(0xFF2979FF),
     tertiary = Color(0xFFFF9E2C),
     background = Color(0xFF080A12),
     surface = Color(0xFF141824),
     surfaceVariant = Color(0xFF1B1F2E),
-    onPrimary = Color.White,
+    onPrimary = Color.Black,
     onSecondary = Color.White,
     onTertiary = Color.Black,
     onBackground = Color.White,
@@ -35,8 +35,8 @@ private val DarkM3ColorScheme = darkColorScheme(
 )
 
 private val LightM3ColorScheme = lightColorScheme(
-    primary = Color(0xFFE02E7A),
-    secondary = Color(0xFF9932CC),
+    primary = Color(0xFF0066FF),
+    secondary = Color(0xFF0284C7),
     tertiary = Color(0xFFFF9E2C),
     background = Color(0xFFF3F5FA),
     surface = Color(0xFFFFFFFF),

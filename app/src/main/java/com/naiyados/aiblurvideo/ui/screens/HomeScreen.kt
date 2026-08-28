@@ -176,10 +176,10 @@ private fun BatchQueueHeroBanner(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
-        color = if (appColors.isDark) Color(0xFF1E1C2B) else appColors.surface,
+        color = if (appColors.isDark) Color(0xFF161928) else appColors.surface,
         border = BorderStroke(
             width = 1.dp,
-            color = if (isProcessing) AiBlurColors.Pink else appColors.border
+            color = if (isProcessing) appColors.primary else appColors.border
         ),
         shadowElevation = if (appColors.isDark) 0.dp else 3.dp,
         modifier = Modifier.fillMaxWidth()
@@ -203,8 +203,8 @@ private fun BatchQueueHeroBanner(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    AiBlurColors.Pink.copy(alpha = 0.3f),
-                                    AiBlurColors.Purple.copy(alpha = 0.3f)
+                                    appColors.primary.copy(alpha = 0.25f),
+                                    appColors.secondary.copy(alpha = 0.25f)
                                 )
                             )
                         ),
@@ -213,14 +213,14 @@ private fun BatchQueueHeroBanner(
                     if (isProcessing) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            color = AiBlurColors.Pink,
+                            color = appColors.primary,
                             strokeWidth = 2.5.dp
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.VideoLibrary,
                             contentDescription = null,
-                            tint = AiBlurColors.Pink,
+                            tint = appColors.primary,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -242,12 +242,12 @@ private fun BatchQueueHeroBanner(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(AiBlurColors.Pink)
+                                    .background(appColors.primary)
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = "Processing",
-                                    color = Color.White,
+                                    color = if (appColors.isDark) Color.Black else Color.White,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -310,19 +310,21 @@ private fun HomeHeader(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column(
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             Text(
                 text = "AI Blur Video",
-                color = AiBlurColors.TextPrimary,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.ExtraBold
+                color = appColors.textPrimary,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.3).sp
             )
 
             Text(
                 text = "Smart blur editor for videos",
-                color = AiBlurColors.TextSecondary,
-                fontSize = 13.sp
+                color = appColors.textSecondary,
+                fontSize = 12.sp
             )
         }
 
@@ -333,21 +335,21 @@ private fun HomeHeader(
             // Theme Toggle Button
             Surface(
                 onClick = onThemeClick,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = if (appColors.isDark) Color.White.copy(alpha = 0.08f) else appColors.surfaceElevated,
                 border = BorderStroke(1.dp, appColors.border),
                 modifier = Modifier.testTag("theme_toggle_button")
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Icon(
                         imageVector = themeIcon,
                         contentDescription = "Change Theme",
                         tint = if (appColors.isDark) AiBlurColors.Purple else AiBlurColors.Orange,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
                         text = when (themeMode) {
@@ -356,8 +358,8 @@ private fun HomeHeader(
                             AppThemeMode.SYSTEM -> "Auto"
                         },
                         color = appColors.textPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
