@@ -328,7 +328,6 @@ fun PlayerTextureViewFit(
         update = { container ->
             val currentTexture = textureViewRef ?: container.getChildAt(0) as? TextureView
             currentTexture?.let { texture ->
-                player.setVideoTextureView(texture)
                 applyVideoTransformMatrix(
                     view = texture,
                     videoWidth = player.videoSize.width,

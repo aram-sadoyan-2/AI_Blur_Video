@@ -318,6 +318,10 @@ fun BlurMode(
         mutableFloatStateOf(0f)
     }
 
+    var isTimelineClipSelected by remember {
+        mutableStateOf(false)
+    }
+
     var showExportSettingsDialog by remember {
         mutableStateOf(false)
     }
@@ -1019,6 +1023,10 @@ fun BlurMode(
                 saveSnapshotForUndo()
                 trimStartMs = start
                 trimEndMs = end
+            },
+            isClipSelected = isTimelineClipSelected,
+            onClipSelectedChange = { selected ->
+                isTimelineClipSelected = selected
             }
         )
 
@@ -1496,55 +1504,23 @@ fun BlurMode(
                     BlurMode.Crop -> {
                         val srcW = player.videoSize.width.takeIf { it > 0 } ?: 1080
                         val srcH = player.videoSize.height.takeIf { it > 0 } ?: 1920
-                        Column(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            AspectRatioSelectorBar(
-                                selectedRatio = selectedAspectRatio,
-                                sourceWidth = srcW,
-                                sourceHeight = srcH,
-                                onRatioSelected = { newRatio ->
-                                    saveSnapshotForUndo()
-                                    selectedAspectRatio = newRatio
-                                    if (newRatio == VideoAspectRatio.ORIGINAL) {
-                                        customCropRect = RectF(0f, 0f, 1f, 1f)
-                                        customCropRotation = 0f
-                                    } else if (newRatio != VideoAspectRatio.FREEFORM) {
-                                        customCropRect = newRatio.calculateNormalizedCropRect(srcW, srcH)
-                                        customCropRotation = 0f
-                                    }
+                        AspectRatioSelectorBar(
+                            selectedRatio = selectedAspectRatio,
+                            sourceWidth = srcW,
+                            sourceHeight = srcH,
+                            onRatioSelected = { newRatio ->
+                                saveSnapshotForUndo()
+                                selectedAspectRatio = newRatio
+                                if (newRatio == VideoAspectRatio.ORIGINAL) {
+                                    customCropRect = RectF(0f, 0f, 1f, 1f)
+                                    customCropRotation = 0f
+                                } else if (newRatio != VideoAspectRatio.FREEFORM) {
+                                    customCropRect = newRatio.calculateNormalizedCropRect(srcW, srcH)
+                                    customCropRotation = 0f
                                 }
-                            )
-
-                            // Clean trim indicator & reset bar
-                            val maxDur = maxOf(videoTotalDurationMs, player.duration, 5000L)
-                            val isTrimmed = trimStartMs > 0L || (trimEndMs in 1 until maxDur)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "💡 Drag the cyan left/right handles on the timeline above to cut & trim",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF4EF2C8)
-                                )
-                                if (isTrimmed) {
-                                    Text(
-                                        text = "Reset Full",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        modifier = Modifier.clickable {
-                                            saveSnapshotForUndo()
-                                            trimStartMs = 0L
-                                            trimEndMs = maxDur
-                                        }
-                                    )
-                                }
-                            }
-                        }
+                            },
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
+                        )
                     }
                 }
 

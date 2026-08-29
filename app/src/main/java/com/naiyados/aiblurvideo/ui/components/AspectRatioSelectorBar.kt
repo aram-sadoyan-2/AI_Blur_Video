@@ -59,7 +59,7 @@ fun AspectRatioSelectorBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -68,18 +68,18 @@ fun AspectRatioSelectorBar(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Crop,
                         contentDescription = null,
                         tint = appColors.primary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "Aspect Ratio & Framing Crop",
+                        text = "Aspect Ratio & Crop",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -87,17 +87,17 @@ fun AspectRatioSelectorBar(
                 if (selectedRatio != VideoAspectRatio.ORIGINAL) {
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .clickable { onRatioSelected(VideoAspectRatio.ORIGINAL) }
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.RestartAlt,
                             contentDescription = "Reset",
                             tint = appColors.primary,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Text(
                             text = "Reset",
@@ -116,14 +116,14 @@ fun AspectRatioSelectorBar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Horizontally Scrollable Aspect Ratio Presets
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(scrollState),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 VideoAspectRatio.values().forEach { ratio ->
                     val isSelected = ratio == selectedRatio
@@ -133,7 +133,7 @@ fun AspectRatioSelectorBar(
                         modifier = Modifier
                             .clickable { onRatioSelected(ratio) }
                             .testTag("aspect_chip_${ratio.id}"),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = if (isSelected) appColors.primary else Color.White.copy(alpha = 0.08f),
                         border = BorderStroke(
                             width = 1.dp,
@@ -141,32 +141,32 @@ fun AspectRatioSelectorBar(
                         )
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             // Aspect Ratio Geometric Mini Icon Preview
                             Box(
                                 modifier = Modifier
-                                    .size(24.dp),
+                                    .size(20.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 val (iconW, iconH) = when (ratio) {
-                                    VideoAspectRatio.FREEFORM -> Pair(15.dp, 13.dp)
-                                    VideoAspectRatio.ORIGINAL -> Pair(16.dp, 16.dp)
-                                    VideoAspectRatio.PORTRAIT_9_16 -> Pair(10.dp, 18.dp)
-                                    VideoAspectRatio.LANDSCAPE_16_9 -> Pair(20.dp, 11.dp)
-                                    VideoAspectRatio.SQUARE_1_1 -> Pair(14.dp, 14.dp)
-                                    VideoAspectRatio.FEED_4_5 -> Pair(12.dp, 15.dp)
-                                    VideoAspectRatio.PORTRAIT_3_4 -> Pair(12.dp, 16.dp)
-                                    VideoAspectRatio.LANDSCAPE_4_3 -> Pair(16.dp, 12.dp)
-                                    VideoAspectRatio.CINEMATIC_21_9 -> Pair(22.dp, 9.dp)
+                                    VideoAspectRatio.FREEFORM -> Pair(13.dp, 11.dp)
+                                    VideoAspectRatio.ORIGINAL -> Pair(14.dp, 14.dp)
+                                    VideoAspectRatio.PORTRAIT_9_16 -> Pair(9.dp, 16.dp)
+                                    VideoAspectRatio.LANDSCAPE_16_9 -> Pair(17.dp, 10.dp)
+                                    VideoAspectRatio.SQUARE_1_1 -> Pair(12.dp, 12.dp)
+                                    VideoAspectRatio.FEED_4_5 -> Pair(10.dp, 13.dp)
+                                    VideoAspectRatio.PORTRAIT_3_4 -> Pair(10.dp, 14.dp)
+                                    VideoAspectRatio.LANDSCAPE_4_3 -> Pair(14.dp, 10.dp)
+                                    VideoAspectRatio.CINEMATIC_21_9 -> Pair(18.dp, 8.dp)
                                 }
                                 Box(
                                     modifier = Modifier
                                         .size(width = iconW, height = iconH)
                                         .border(
-                                            width = 1.5.dp,
+                                            width = 1.2.dp,
                                             color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
                                             shape = RoundedCornerShape(2.dp)
                                         )
@@ -180,7 +180,7 @@ fun AspectRatioSelectorBar(
                             Text(
                                 text = ratio.title.split(" ").first(),
                                 color = Color.White,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
 
@@ -188,7 +188,7 @@ fun AspectRatioSelectorBar(
                                 Text(
                                     text = "${outW}×${outH}",
                                     color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.45f),
-                                    fontSize = 9.sp,
+                                    fontSize = 8.5.sp,
                                     fontFamily = FontFamily.Monospace
                                 )
                             }

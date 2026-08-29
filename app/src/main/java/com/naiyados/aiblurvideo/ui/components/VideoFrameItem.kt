@@ -92,7 +92,9 @@ fun VideoFrameStripSection(
     trimStartMs: Long = 0L,
     trimEndMs: Long = 0L,
     playbackSpeed: Float = 1.0f,
-    onTrimChange: (startMs: Long, endMs: Long) -> Unit = { _, _ -> }
+    onTrimChange: (startMs: Long, endMs: Long) -> Unit = { _, _ -> },
+    isClipSelected: Boolean = false,
+    onClipSelectedChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -172,7 +174,9 @@ fun VideoFrameStripSection(
             trimStartMs = trimStartMs,
             trimEndMs = trimEndMs,
             playbackSpeed = playbackSpeed,
-            onTrimChange = onTrimChange
+            onTrimChange = onTrimChange,
+            isClipSelected = isClipSelected,
+            onClipSelectedChange = onClipSelectedChange
         )
     }
 }
@@ -197,13 +201,16 @@ private fun FixedCenterTimeline(
     trimStartMs: Long = 0L,
     trimEndMs: Long = 0L,
     playbackSpeed: Float = 1.0f,
-    onTrimChange: (startMs: Long, endMs: Long) -> Unit = { _, _ -> }
+    onTrimChange: (startMs: Long, endMs: Long) -> Unit = { _, _ -> },
+    isClipSelected: Boolean = false,
+    onClipSelectedChange: (Boolean) -> Unit = {}
 ) {
     val density = LocalDensity.current
     val latestOnSeekTo by rememberUpdatedState(onSeekTo)
     val latestOnScrubFrameChange by rememberUpdatedState(onScrubFrameChange)
     val latestOnScrubbingStateChanged by rememberUpdatedState(onScrubbingStateChanged)
     val latestOnTrimChange by rememberUpdatedState(onTrimChange)
+    val latestOnClipSelectedChange by rememberUpdatedState(onClipSelectedChange)
     val latestFrames by rememberUpdatedState(frames)
     val latestDurationMs by rememberUpdatedState(durationMs)
 
@@ -358,17 +365,23 @@ private fun FixedCenterTimeline(
                 ) {
                     Spacer(modifier = Modifier.width(sidePadding))
 
-                    // Video Track Box with frames, dimmed areas, and mint border & drag handles
+                    // Video Track Box with frames, dimmed areas, and optional mint border & drag handles
                     Box(
                         modifier = Modifier
                             .width(clipTrackWidth)
                             .height(54.dp)
+                            .clickable {
+                                latestOnClipSelectedChange(true)
+                            }
                     ) {
                         // 2a. Base Strip of video thumbnails
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFF1E2026),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isClipSelected) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f)
+                            ),
                             modifier = Modifier.fillMaxSize()
                         ) {
                             Row(
@@ -406,7 +419,7 @@ private fun FixedCenterTimeline(
                         val endFraction = (effectiveTrimEndMs.toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
                         val startPx = startFraction * clipTrackWidthPx
                         val endPx = endFraction * clipTrackWidthPx
-                        val handleWidthPx = with(density) { 14.dp.toPx() }
+                        val handleWidthPx = with(density) { 16.dp.toPx() }
                         val trimWidthPx = (endPx - startPx).coerceAtLeast(handleWidthPx * 2)
 
                         val mintBorderColor = Color(0xFF4EF2C8)
@@ -434,159 +447,163 @@ private fun FixedCenterTimeline(
                             )
                         }
 
-                        // 2d. Bordered Lines Box with Left & Right Handles (Exact Match for photo IMG_3820.jpg)
-                        val startOffsetDp = with(density) { startPx.toDp() }
-                        val trimWidthDp = with(density) { trimWidthPx.toDp() }
+                        // 2d. Bordered Lines Box with Left & Right Handles (Appears ONLY when clip is selected/touched)
+                        if (isClipSelected) {
+                            val startOffsetDp = with(density) { startPx.toDp() }
+                            val trimWidthDp = with(density) { trimWidthPx.toDp() }
 
-                        Box(
-                            modifier = Modifier
-                                .offset(x = startOffsetDp)
-                                .width(trimWidthDp)
-                                .fillMaxHeight()
-                        ) {
-                            // Top Border Line
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(3.dp)
-                                    .align(Alignment.TopCenter)
-                                    .background(mintBorderColor)
-                            )
-
-                            // Bottom Border Line
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(3.dp)
-                                    .align(Alignment.BottomCenter)
-                                    .background(mintBorderColor)
-                            )
-
-                            // Left Drag Handle (Rounded bar)
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.CenterStart)
-                                    .width(14.dp)
+                                    .offset(x = startOffsetDp)
+                                    .width(trimWidthDp)
                                     .fillMaxHeight()
-                                    .background(
-                                        color = mintBorderColor,
-                                        shape = RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp, topEnd = 2.dp, bottomEnd = 2.dp)
-                                    )
-                                    .pointerInput(clipTrackWidthPx, effectiveDurationMs, effectiveTrimEndMs) {
-                                        detectHorizontalDragGestures(
-                                            onDragStart = {
-                                                latestOnScrubbingStateChanged(true)
-                                            },
-                                            onHorizontalDrag = { change, dragAmount ->
-                                                change.consume()
-                                                val deltaMs = ((dragAmount / clipTrackWidthPx) * effectiveDurationMs).toLong()
-                                                val newStart = (effectiveTrimStartMs + deltaMs).coerceIn(0L, effectiveTrimEndMs - 500L)
-                                                latestOnTrimChange(newStart, effectiveTrimEndMs)
-                                                latestOnSeekTo(newStart)
-                                            },
-                                            onDragEnd = {
-                                                latestOnScrubbingStateChanged(false)
-                                            },
-                                            onDragCancel = {
-                                                latestOnScrubbingStateChanged(false)
-                                            }
-                                        )
-                                    },
-                                contentAlignment = Alignment.Center
                             ) {
-                                // Inner grip notch
+                                // Top Border Line
                                 Box(
                                     modifier = Modifier
-                                        .width(2.dp)
-                                        .height(18.dp)
-                                        .background(Color(0xFF101B17), RoundedCornerShape(1.dp))
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .align(Alignment.TopCenter)
+                                        .background(mintBorderColor)
                                 )
-                            }
 
-                            // Right Drag Handle (Rounded bar)
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .width(14.dp)
-                                    .fillMaxHeight()
-                                    .background(
-                                        color = mintBorderColor,
-                                        shape = RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp, topStart = 2.dp, bottomStart = 2.dp)
-                                    )
-                                    .pointerInput(clipTrackWidthPx, effectiveDurationMs, effectiveTrimStartMs) {
-                                        detectHorizontalDragGestures(
-                                            onDragStart = {
-                                                latestOnScrubbingStateChanged(true)
-                                            },
-                                            onHorizontalDrag = { change, dragAmount ->
-                                                change.consume()
-                                                val deltaMs = ((dragAmount / clipTrackWidthPx) * effectiveDurationMs).toLong()
-                                                val newEnd = (effectiveTrimEndMs + deltaMs).coerceIn(effectiveTrimStartMs + 500L, effectiveDurationMs)
-                                                latestOnTrimChange(effectiveTrimStartMs, newEnd)
-                                                latestOnSeekTo(newEnd)
-                                            },
-                                            onDragEnd = {
-                                                latestOnScrubbingStateChanged(false)
-                                            },
-                                            onDragCancel = {
-                                                latestOnScrubbingStateChanged(false)
-                                            }
-                                        )
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // Inner grip notch
+                                // Bottom Border Line
                                 Box(
                                     modifier = Modifier
-                                        .width(2.dp)
-                                        .height(18.dp)
-                                        .background(Color(0xFF101B17), RoundedCornerShape(1.dp))
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .align(Alignment.BottomCenter)
+                                        .background(mintBorderColor)
                                 )
-                            }
 
-                            // Speed Badge in bottom-left inside active clip (matches IMG_3820.jpg)
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color.Black.copy(alpha = 0.75f),
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(start = 18.dp, bottom = 5.dp)
-                            ) {
-                                Text(
-                                    text = "x" + String.format(Locale.US, "%.2f", playbackSpeed),
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                )
-                            }
-
-                            // Duration badge in top-right inside active clip (matches IMG_3820.jpg)
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color.Black.copy(alpha = 0.75f),
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(end = 18.dp, top = 5.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                // Left Drag Handle (Rounded bar)
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .width(16.dp)
+                                        .fillMaxHeight()
+                                        .background(
+                                            color = mintBorderColor,
+                                            shape = RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp, topEnd = 2.dp, bottomEnd = 2.dp)
+                                        )
+                                        .pointerInput(clipTrackWidthPx, effectiveDurationMs, effectiveTrimEndMs) {
+                                            detectHorizontalDragGestures(
+                                                onDragStart = {
+                                                    latestOnClipSelectedChange(true)
+                                                    latestOnScrubbingStateChanged(true)
+                                                },
+                                                onHorizontalDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    val deltaMs = ((dragAmount / clipTrackWidthPx) * effectiveDurationMs).toLong()
+                                                    val newStart = (effectiveTrimStartMs + deltaMs).coerceIn(0L, effectiveTrimEndMs - 500L)
+                                                    latestOnTrimChange(newStart, effectiveTrimEndMs)
+                                                    latestOnSeekTo(newStart)
+                                                },
+                                                onDragEnd = {
+                                                    latestOnScrubbingStateChanged(false)
+                                                },
+                                                onDragCancel = {
+                                                    latestOnScrubbingStateChanged(false)
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PlayArrow,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(10.dp)
+                                    // Inner grip notch
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .height(18.dp)
+                                            .background(Color(0xFF101B17), RoundedCornerShape(1.dp))
                                     )
-                                    val clipDurationMs = (effectiveTrimEndMs - effectiveTrimStartMs).coerceAtLeast(0L)
+                                }
+
+                                // Right Drag Handle (Rounded bar)
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(16.dp)
+                                        .fillMaxHeight()
+                                        .background(
+                                            color = mintBorderColor,
+                                            shape = RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp, topStart = 2.dp, bottomStart = 2.dp)
+                                        )
+                                        .pointerInput(clipTrackWidthPx, effectiveDurationMs, effectiveTrimStartMs) {
+                                            detectHorizontalDragGestures(
+                                                onDragStart = {
+                                                    latestOnClipSelectedChange(true)
+                                                    latestOnScrubbingStateChanged(true)
+                                                },
+                                                onHorizontalDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    val deltaMs = ((dragAmount / clipTrackWidthPx) * effectiveDurationMs).toLong()
+                                                    val newEnd = (effectiveTrimEndMs + deltaMs).coerceIn(effectiveTrimStartMs + 500L, effectiveDurationMs)
+                                                    latestOnTrimChange(effectiveTrimStartMs, newEnd)
+                                                    latestOnSeekTo(newEnd)
+                                                },
+                                                onDragEnd = {
+                                                    latestOnScrubbingStateChanged(false)
+                                                },
+                                                onDragCancel = {
+                                                    latestOnScrubbingStateChanged(false)
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Inner grip notch
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .height(18.dp)
+                                            .background(Color(0xFF101B17), RoundedCornerShape(1.dp))
+                                    )
+                                }
+
+                                // Speed Badge in bottom-left inside active clip (matches IMG_3820.jpg)
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color.Black.copy(alpha = 0.75f),
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(start = 20.dp, bottom = 5.dp)
+                                ) {
                                     Text(
-                                        text = formatSecondDuration(clipDurationMs),
+                                        text = "x" + String.format(Locale.US, "%.2f", playbackSpeed),
                                         color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                     )
+                                }
+
+                                // Duration badge in top-right inside active clip (matches IMG_3820.jpg)
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color.Black.copy(alpha = 0.75f),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(end = 20.dp, top = 5.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                        val clipDurationMs = (effectiveTrimEndMs - effectiveTrimStartMs).coerceAtLeast(0L)
+                                        Text(
+                                            text = formatSecondDuration(clipDurationMs),
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -717,7 +734,7 @@ private suspend fun loadCachedTimelineFramesProgressive(
     onDuration: suspend (Long) -> Unit,
     onFrame: suspend (TimelineFrame) -> Unit
 ) {
-    val videoKey = "v14_320px_" + videoUri.toString()
+    val videoKey = "v16_140px_" + videoUri.toString()
         .hashCode()
         .toString()
         .replace("-", "m")
@@ -781,13 +798,16 @@ private suspend fun loadCachedTimelineFramesProgressive(
                 } else {
                     val bitmap = retriever.getFrameAtTime(
                         timeMs * 1000L,
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    ) ?: retriever.getFrameAtTime(
+                        timeMs * 1000L,
                         MediaMetadataRetriever.OPTION_CLOSEST
                     )
 
                     if (bitmap != null) {
                         val smallBitmap = createTimelineThumbnail(
                             source = bitmap,
-                            maxSide = 320
+                            maxSide = 140
                         )
 
                         if (smallBitmap != bitmap) {
@@ -810,7 +830,8 @@ private suspend fun loadCachedTimelineFramesProgressive(
                     }
                 }
 
-                timeMs += 125L
+                timeMs += 1000L
+                kotlinx.coroutines.yield()
             }
         } catch (_: Throwable) {
             withContext(Dispatchers.Main) {
