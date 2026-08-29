@@ -80,7 +80,7 @@ fun HistorySection(
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
-                    text = "Recent Processed Videos",
+                    text = "Exported Videos",
                     color = appColors.textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
@@ -88,9 +88,10 @@ fun HistorySection(
             }
 
             Text(
-                text = "${items.size} videos",
-                color = appColors.textSecondary,
-                fontSize = 12.sp
+                text = "${items.size} saved to Gallery",
+                color = appColors.primary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
             )
         }
 

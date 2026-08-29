@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import com.naiyados.aiblurvideo.history.ProcessedVideoHistoryManager
 import com.naiyados.aiblurvideo.queue.BatchQueueManager
 import com.naiyados.aiblurvideo.queue.QueueItemStatus
+import com.naiyados.aiblurvideo.ui.components.BatchVideoPreviewDialog
 import com.naiyados.aiblurvideo.ui.components.GlassCard
 import com.naiyados.aiblurvideo.ui.components.HistorySection
 import com.naiyados.aiblurvideo.ui.components.PremiumBadge
@@ -87,6 +88,8 @@ fun HomeScreen(
     val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     var showThemeDialog by remember { mutableStateOf(false) }
+    var previewVideoUri by remember { mutableStateOf<Uri?>(null) }
+    var previewVideoTitle by remember { mutableStateOf("Exported Video") }
 
     LaunchedEffect(Unit) {
         ProcessedVideoHistoryManager.init(context)
@@ -99,6 +102,18 @@ fun HomeScreen(
     if (showThemeDialog) {
         ThemeSelectionDialog(
             onDismissRequest = { showThemeDialog = false }
+        )
+    }
+
+    if (previewVideoUri != null) {
+        BatchVideoPreviewDialog(
+            videoUri = previewVideoUri!!,
+            videoTitle = previewVideoTitle,
+            onDismissRequest = { previewVideoUri = null },
+            onOpenInStudio = { uri ->
+                previewVideoUri = null
+                onOpenVideo(uri)
+            }
         )
     }
 
@@ -140,7 +155,11 @@ fun HomeScreen(
             item {
                 HistorySection(
                     items = historyItems,
-                    onOpenVideo = onOpenVideo,
+                    onOpenVideo = { uri ->
+                        val record = historyItems.find { it.uriString == uri.toString() }
+                        previewVideoTitle = if (record != null) "Exported • ${record.resolutionLabel}" else "Exported Video"
+                        previewVideoUri = uri
+                    },
                     onDeleteVideo = { id ->
                         ProcessedVideoHistoryManager.removeVideo(context, id)
                     }

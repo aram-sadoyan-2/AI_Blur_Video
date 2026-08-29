@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -145,36 +146,7 @@ fun VideoPreviewPanel(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            clip = true
-
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                val blurEffect = if (blurRadiusPx > 0.5f) {
-                                    AndroidRenderEffect.createBlurEffect(
-                                        blurRadiusPx,
-                                        blurRadiusPx,
-                                        Shader.TileMode.CLAMP
-                                    )
-                                } else null
-
-                                val colorFilterEffect = if (selectedFilter != VideoFilter.NONE) {
-                                    val cm = selectedFilter.createColorMatrix(filterIntensity)
-                                    AndroidRenderEffect.createColorFilterEffect(
-                                        ColorMatrixColorFilter(cm)
-                                    )
-                                } else null
-
-                                renderEffect = when {
-                                    blurEffect != null && colorFilterEffect != null -> {
-                                        AndroidRenderEffect.createChainEffect(blurEffect, colorFilterEffect)
-                                            .asComposeRenderEffect()
-                                    }
-                                    blurEffect != null -> blurEffect.asComposeRenderEffect()
-                                    colorFilterEffect != null -> colorFilterEffect.asComposeRenderEffect()
-                                    else -> null
-                                }
-                            }
-                        }
+                        .clipToBounds()
                 ) {
                     PlayerTextureViewFit(
                         player = player,
@@ -302,6 +274,14 @@ fun PlayerTextureViewFit(
         mutableStateOf<TextureView?>(null)
     }
 
+    // Keep track of applied visual properties to prevent pipeline resets on identical frames
+    var lastAppliedBlur by remember { mutableFloatStateOf(-1f) }
+    var lastAppliedFilter by remember { mutableStateOf<VideoFilter?>(null) }
+    var lastAppliedIntensity by remember { mutableFloatStateOf(-1f) }
+    var lastAppliedCropToFill by remember { mutableStateOf<Boolean?>(null) }
+    var lastAppliedWidth by remember { mutableIntStateOf(-1) }
+    var lastAppliedHeight by remember { mutableIntStateOf(-1) }
+
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
@@ -328,40 +308,54 @@ fun PlayerTextureViewFit(
         update = { container ->
             val currentTexture = textureViewRef ?: container.getChildAt(0) as? TextureView
             currentTexture?.let { texture ->
-                applyVideoTransformMatrix(
-                    view = texture,
-                    videoWidth = player.videoSize.width,
-                    videoHeight = player.videoSize.height,
-                    cropToFill = cropToFill
-                )
+                val vWidth = player.videoSize.width
+                val vHeight = player.videoSize.height
 
+                // Only re-apply transform matrix if dimensions or crop mode actually changed
+                if (vWidth != lastAppliedWidth || vHeight != lastAppliedHeight || cropToFill != lastAppliedCropToFill) {
+                    applyVideoTransformMatrix(
+                        view = texture,
+                        videoWidth = vWidth,
+                        videoHeight = vHeight,
+                        cropToFill = cropToFill
+                    )
+                    lastAppliedWidth = vWidth
+                    lastAppliedHeight = vHeight
+                    lastAppliedCropToFill = cropToFill
+                }
+
+                // Only re-apply RenderEffect if blur or filter parameters actually changed
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val blurEffect = if (blurRadiusPx > 0.5f) {
-                        android.graphics.RenderEffect.createBlurEffect(
-                            blurRadiusPx,
-                            blurRadiusPx,
-                            Shader.TileMode.CLAMP
-                        )
-                    } else null
+                    if (blurRadiusPx != lastAppliedBlur || selectedFilter != lastAppliedFilter || filterIntensity != lastAppliedIntensity) {
+                        val blurEffect = if (blurRadiusPx > 0.5f) {
+                            android.graphics.RenderEffect.createBlurEffect(
+                                blurRadiusPx,
+                                blurRadiusPx,
+                                Shader.TileMode.CLAMP
+                            )
+                        } else null
 
-                    val colorFilterEffect = if (selectedFilter != VideoFilter.NONE) {
-                        val cm = selectedFilter.createColorMatrix(filterIntensity)
-                        android.graphics.RenderEffect.createColorFilterEffect(
-                            ColorMatrixColorFilter(cm)
-                        )
-                    } else null
+                        val colorFilterEffect = if (selectedFilter != VideoFilter.NONE) {
+                            val cm = selectedFilter.createColorMatrix(filterIntensity)
+                            android.graphics.RenderEffect.createColorFilterEffect(
+                                ColorMatrixColorFilter(cm)
+                            )
+                        } else null
 
-                    val combinedEffect = when {
-                        blurEffect != null && colorFilterEffect != null -> {
-                            android.graphics.RenderEffect.createChainEffect(blurEffect, colorFilterEffect)
+                        val combinedEffect = when {
+                            blurEffect != null && colorFilterEffect != null -> {
+                                android.graphics.RenderEffect.createChainEffect(blurEffect, colorFilterEffect)
+                            }
+                            blurEffect != null -> blurEffect
+                            colorFilterEffect != null -> colorFilterEffect
+                            else -> null
                         }
-                        blurEffect != null -> blurEffect
-                        colorFilterEffect != null -> colorFilterEffect
-                        else -> null
-                    }
 
-                    texture.setRenderEffect(combinedEffect)
-                    container.setRenderEffect(combinedEffect)
+                        texture.setRenderEffect(combinedEffect)
+                        lastAppliedBlur = blurRadiusPx
+                        lastAppliedFilter = selectedFilter
+                        lastAppliedIntensity = filterIntensity
+                    }
                 }
             }
         }

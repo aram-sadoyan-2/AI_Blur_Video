@@ -103,6 +103,7 @@ import com.naiyados.aiblurvideo.autoplate.PlateInferenceStats
 import com.naiyados.aiblurvideo.autoplate.PlateTrackConfidence
 import com.naiyados.aiblurvideo.autoplate.export.AutoPlateVideoExporter
 import com.naiyados.aiblurvideo.autoplate.export.ExportSettings
+import com.naiyados.aiblurvideo.history.ProcessedVideoHistoryManager
 import com.naiyados.aiblurvideo.ui.components.AspectRatioSelectorBar
 import com.naiyados.aiblurvideo.ui.components.BlurStrengthSlider
 import com.naiyados.aiblurvideo.ui.components.DetectionProgressCard
@@ -517,7 +518,7 @@ fun BlurMode(
                     player.seekTo(trimStartMs)
                 }
             }
-            delay(33) // ~30 fps
+            delay(if (isPlaying) 100L else 50L)
         }
     }
 
@@ -616,6 +617,20 @@ fun BlurMode(
                         timeline = if (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face) timeline else null,
                         durationMs = duration,
                         onProgress = { exportProgress = it }
+                    )
+
+                    val exportDurMs = if (editConfig.trimEndMs > editConfig.trimStartMs) {
+                        editConfig.trimEndMs - editConfig.trimStartMs
+                    } else {
+                        duration
+                    }
+
+                    ProcessedVideoHistoryManager.addProcessedVideo(
+                        context = context,
+                        uri = result.outputUri,
+                        blurredFrames = result.blurredFrames,
+                        durationMs = exportDurMs,
+                        resolutionLabel = editConfig.exportSettings.resolution.label
                     )
 
                     Log.d("VideoEditor", "Export successful! frames=${result.frameCount} blurred=${result.blurredFrames} uri=${result.outputUri}")
