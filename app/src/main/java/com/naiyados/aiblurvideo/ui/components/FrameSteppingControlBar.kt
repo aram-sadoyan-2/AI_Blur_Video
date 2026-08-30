@@ -69,8 +69,6 @@ import kotlin.math.roundToInt
 fun FrameSteppingControlBar(
     currentPositionMs: Long,
     totalDurationMs: Long,
-    isPlaying: Boolean,
-    onPlayPauseClick: () -> Unit,
     onStepFrames: (Int) -> Unit, // e.g. -10, -1, +1, +10
     keyframes: List<KeyframeBlurBox>,
     onApplyPropagation: (Int) -> Unit, // e.g. 5, 10, 20 frames
@@ -97,12 +95,12 @@ fun FrameSteppingControlBar(
                 brush = Brush.verticalGradient(
                     listOf(Color(0xFF14161F), Color(0xFF0D0E15))
                 ),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(12.dp)
             )
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Row 1: Frame Stepping Buttons + Frame Indicator + Play/Pause
+        // Row 1: Compact Frame Stepping Buttons + Frame Indicator
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -116,15 +114,15 @@ fun FrameSteppingControlBar(
                 // -10 Frames Button
                 Surface(
                     modifier = Modifier
-                        .height(34.dp)
+                        .height(28.dp)
                         .clickable { onStepFrames(-10) }
                         .testTag("step_minus_10_frames_btn"),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(7.dp),
                     color = Color(0xFF222533),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 7.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
@@ -132,7 +130,7 @@ fun FrameSteppingControlBar(
                             imageVector = Icons.Rounded.FastRewind,
                             contentDescription = "-10 Frames",
                             tint = Color(0xFF64B5F6),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Text(
                             text = "-10",
@@ -146,15 +144,15 @@ fun FrameSteppingControlBar(
                 // -1 Frame Button
                 Surface(
                     modifier = Modifier
-                        .height(34.dp)
+                        .height(28.dp)
                         .clickable { onStepFrames(-1) }
                         .testTag("step_minus_1_frame_btn"),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(7.dp),
                     color = Color(0xFF222533),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
@@ -162,7 +160,7 @@ fun FrameSteppingControlBar(
                             imageVector = Icons.Rounded.NavigateBefore,
                             contentDescription = "-1 Frame",
                             tint = Color.White,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = "-1f",
@@ -174,47 +172,22 @@ fun FrameSteppingControlBar(
                 }
             }
 
-            // Center: Frame Counter & Timestamp Badge + Mini Play Button
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            // Center: Frame Counter & Timestamp Badge
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Play / Pause mini toggle
-                Surface(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable(onClick = onPlayPauseClick)
-                        .testTag("frame_bar_play_pause_btn"),
-                    shape = CircleShape,
-                    color = if (isPlaying) AiBlurColors.Green else Color.White.copy(alpha = 0.18f),
-                    border = BorderStroke(1.dp, if (isPlaying) AiBlurColors.Green else Color.White.copy(alpha = 0.35f))
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = if (isPlaying) Color.Black else Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Frame #$currentFrameIndex / $totalFrames",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = formatPreciseTime(currentPositionMs),
-                        fontSize = 10.sp,
-                        color = Color(0xFF00E676),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                Text(
+                    text = "Frame #$currentFrameIndex / $totalFrames",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = formatPreciseTime(currentPositionMs),
+                    fontSize = 10.sp,
+                    color = Color(0xFF00E676),
+                    fontWeight = FontWeight.Medium
+                )
             }
 
             // Right: +1 and +10 Frame Steppers
@@ -225,15 +198,15 @@ fun FrameSteppingControlBar(
                 // +1 Frame Button
                 Surface(
                     modifier = Modifier
-                        .height(34.dp)
+                        .height(28.dp)
                         .clickable { onStepFrames(1) }
                         .testTag("step_plus_1_frame_btn"),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(7.dp),
                     color = Color(0xFF222533),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
@@ -247,7 +220,7 @@ fun FrameSteppingControlBar(
                             imageVector = Icons.Rounded.NavigateNext,
                             contentDescription = "+1 Frame",
                             tint = Color.White,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
@@ -255,15 +228,15 @@ fun FrameSteppingControlBar(
                 // +10 Frames Button
                 Surface(
                     modifier = Modifier
-                        .height(34.dp)
+                        .height(28.dp)
                         .clickable { onStepFrames(10) }
                         .testTag("step_plus_10_frames_btn"),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(7.dp),
                     color = Color(0xFF222533),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 7.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
@@ -277,27 +250,27 @@ fun FrameSteppingControlBar(
                             imageVector = Icons.Rounded.FastForward,
                             contentDescription = "+10 Frames",
                             tint = Color(0xFF64B5F6),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                     }
                 }
             }
         }
 
-        // Row 2: Manual Position Propagation Across Frames (User's requested feature)
+        // Row 2: Manual Position Propagation Across Frames (Proportional and sleek)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Text(
                 text = "Apply Box:",
-                fontSize = 11.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.padding(end = 2.dp)
+                modifier = Modifier.padding(end = 1.dp)
             )
 
             // Primary requested action: +-10 Frames
@@ -308,7 +281,7 @@ fun FrameSteppingControlBar(
             )
             Surface(
                 modifier = Modifier
-                    .height(30.dp)
+                    .height(26.dp)
                     .clickable {
                         lastAppliedOffset = 10
                         onApplyPropagation(10)
@@ -318,24 +291,24 @@ fun FrameSteppingControlBar(
                         }
                     }
                     .testTag("apply_propagate_10_frames_btn"),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 color = btn10Bg,
-                border = BorderStroke(1.2.dp, if (is10Active) Color.White else Color(0xFF00E676).copy(alpha = 0.7f))
+                border = BorderStroke(1.dp, if (is10Active) Color.White else Color(0xFF00E676).copy(alpha = 0.7f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 9.dp),
+                    modifier = Modifier.padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Icon(
                         imageVector = if (is10Active) Icons.Rounded.BookmarkAdded else Icons.Rounded.ShareLocation,
                         contentDescription = null,
                         tint = if (is10Active) Color.Black else Color(0xFF00E676),
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(11.dp)
                     )
                     Text(
                         text = "±10 Frames",
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (is10Active) Color.Black else Color.White
                     )
@@ -346,7 +319,7 @@ fun FrameSteppingControlBar(
             val is5Active = lastAppliedOffset == 5
             Surface(
                 modifier = Modifier
-                    .height(30.dp)
+                    .height(26.dp)
                     .clickable {
                         lastAppliedOffset = 5
                         onApplyPropagation(5)
@@ -356,16 +329,16 @@ fun FrameSteppingControlBar(
                         }
                     }
                     .testTag("apply_propagate_5_frames_btn"),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 color = if (is5Active) Color(0xFF64B5F6) else Color(0xFF1A2634),
                 border = BorderStroke(1.dp, Color(0xFF64B5F6).copy(alpha = 0.5f))
             ) {
                 Text(
                     text = "±5 Frames",
-                    fontSize = 11.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (is5Active) Color.Black else Color.White,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                 )
             }
 
@@ -373,7 +346,7 @@ fun FrameSteppingControlBar(
             val is20Active = lastAppliedOffset == 20
             Surface(
                 modifier = Modifier
-                    .height(30.dp)
+                    .height(26.dp)
                     .clickable {
                         lastAppliedOffset = 20
                         onApplyPropagation(20)
@@ -383,23 +356,23 @@ fun FrameSteppingControlBar(
                         }
                     }
                     .testTag("apply_propagate_20_frames_btn"),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 color = if (is20Active) Color(0xFFFFB74D) else Color(0xFF2E241A),
                 border = BorderStroke(1.dp, Color(0xFFFFB74D).copy(alpha = 0.5f))
             ) {
                 Text(
                     text = "±20 Frames",
-                    fontSize = 11.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (is20Active) Color.Black else Color.White,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                 )
             }
 
             // Single keyframe pin / unpin
             Surface(
                 modifier = Modifier
-                    .height(30.dp)
+                    .height(26.dp)
                     .clickable {
                         if (hasKeyframeAtCurrent) {
                             onClearKeyframeAtCurrentTime()
@@ -408,24 +381,24 @@ fun FrameSteppingControlBar(
                         }
                     }
                     .testTag("toggle_single_keyframe_btn"),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 color = if (hasKeyframeAtCurrent) Color(0xFF3B1E22) else Color(0xFF222533),
                 border = BorderStroke(1.dp, if (hasKeyframeAtCurrent) Color(0xFFFF5252) else Color.White.copy(alpha = 0.15f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp),
+                    modifier = Modifier.padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Icon(
                         imageVector = if (hasKeyframeAtCurrent) Icons.Rounded.DeleteOutline else Icons.Rounded.AddLocationAlt,
                         contentDescription = null,
                         tint = if (hasKeyframeAtCurrent) Color(0xFFFF5252) else Color.White,
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(11.dp)
                     )
                     Text(
                         text = if (hasKeyframeAtCurrent) "Remove Pin" else "Pin Frame",
-                        fontSize = 10.5.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
                         color = if (hasKeyframeAtCurrent) Color(0xFFFF5252) else Color.White
                     )
@@ -434,15 +407,15 @@ fun FrameSteppingControlBar(
 
             if (keyframes.isNotEmpty()) {
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(5.dp),
                     color = Color.White.copy(alpha = 0.08f),
-                    modifier = Modifier.padding(start = 4.dp)
+                    modifier = Modifier.padding(start = 2.dp)
                 ) {
                     Text(
-                        text = "${keyframes.size} saved frames",
-                        fontSize = 10.sp,
+                        text = "${keyframes.size} saved",
+                        fontSize = 9.5.sp,
                         color = Color.LightGray,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp)
                     )
                 }
             }

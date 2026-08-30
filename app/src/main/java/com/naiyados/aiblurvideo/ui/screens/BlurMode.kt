@@ -779,7 +779,9 @@ fun BlurMode(
             if (selectedMode != BlurMode.FullBlur) false
             else if (isFullVideoBlur) true
             else if (blurFrameRangeEndMs > blurFrameRangeStartMs && currentPositionMs in blurFrameRangeStartMs..blurFrameRangeEndMs) true
-            else selectedBlurFrameTimestamps.any { kotlin.math.abs(it - currentPositionMs) <= 500L }
+            else selectedBlurFrameTimestamps.any { selSecondMs ->
+                currentPositionMs >= selSecondMs && currentPositionMs < selSecondMs + 1000L
+            }
         }
 
         Box(
@@ -1106,10 +1108,6 @@ fun BlurMode(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
             currentPositionMs = currentPositionMs,
             totalDurationMs = maxOf(videoTotalDurationMs, player.duration, 5000L),
-            isPlaying = isPlaying,
-            onPlayPauseClick = {
-                isPlaying = !isPlaying
-            },
             onStepFrames = onStepFrames,
             keyframes = customKeyframes,
             onApplyPropagation = onApplyPropagation,

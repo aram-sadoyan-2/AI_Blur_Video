@@ -45,7 +45,7 @@ private enum class CropHandleType {
     RESET_BUTTON,    // Top-Left (X)
     ROTATE_BUTTON,   // Top-Right (Rotate ⟳)
     SCALE_BUTTON,    // Bottom-Right (Scale ⤢)
-    PLAY_BUTTON,     // Bottom-Left (Play ▶ / Pause ❚❚)
+    SCALE_BL_BUTTON, // Bottom-Left (Scale ⤢)
     EDGE_TOP,        // Top edge center dot
     EDGE_BOTTOM,     // Bottom edge center dot
     EDGE_LEFT,       // Left edge center dot
@@ -122,9 +122,9 @@ fun CropTransformTouchOverlay(
                         distance(unrotatedTouch.x, unrotatedTouch.y, right, bottom) <= buttonHitRadius -> {
                             CropHandleType.SCALE_BUTTON
                         }
-                        // Bottom-Left (Play/Pause ▶/❚❚) button
+                        // Bottom-Left (Scale ⤢) handle
                         distance(unrotatedTouch.x, unrotatedTouch.y, left, bottom) <= buttonHitRadius -> {
-                            CropHandleType.PLAY_BUTTON
+                            CropHandleType.SCALE_BL_BUTTON
                         }
                         // 4 Edge midpoint dots
                         distance(unrotatedTouch.x, unrotatedTouch.y, cx, top) <= dotHitRadius -> CropHandleType.EDGE_TOP
@@ -266,6 +266,12 @@ fun CropTransformTouchOverlay(
                                             deltaW = scaleDelta * 2f
                                             deltaH = scaleDelta * 2f
                                         }
+                                        CropHandleType.SCALE_BL_BUTTON -> {
+                                            // Bottom-Left: scale
+                                            val scaleDelta = max(-localDx, localDy)
+                                            deltaW = scaleDelta * 2f
+                                            deltaH = scaleDelta * 2f
+                                        }
                                         CropHandleType.EDGE_TOP -> {
                                             deltaH = -localDy
                                             shiftLocalY = localDy / 2f
@@ -396,11 +402,11 @@ fun CropTransformTouchOverlay(
                     iconType = IconType.SCALE
                 )
 
-                // 8. Bottom-Left (▶ / ❚❚) Play/Pause Button
+                // 8. Bottom-Left (⤢) Scale Button
                 drawButtonWithIcon(
                     center = Offset(left, bottom),
                     radius = buttonRadius,
-                    iconType = if (isPlaying) IconType.PAUSE else IconType.PLAY
+                    iconType = IconType.SCALE
                 )
             }
         }

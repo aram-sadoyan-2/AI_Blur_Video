@@ -109,7 +109,7 @@ object KeyframeBoxHelper {
         return when {
             previous != null && next != null && previous.id != next.id -> {
                 val span = (next.timeMs - previous.timeMs).toFloat()
-                if (span > 0f && span <= 2500L) {
+                if (span > 0f && span <= 1500L) {
                     val progress = ((timeMs - previous.timeMs) / span).coerceIn(0f, 1f)
                     val interpLeft = previous.rect.left + (next.rect.left - previous.rect.left) * progress
                     val interpTop = previous.rect.top + (next.rect.top - previous.rect.top) * progress
@@ -125,11 +125,13 @@ object KeyframeBoxHelper {
                         targetType = previous.targetType
                     )
                 } else {
-                    if (timeMs - previous.timeMs < next.timeMs - timeMs) previous else next
+                    if (timeMs - previous.timeMs <= previous.radiusRangeMs) previous
+                    else if (next.timeMs - timeMs <= next.radiusRangeMs) next
+                    else fallbackRect?.let { KeyframeBlurBox(timeMs = timeMs, rect = it) }
                 }
             }
-            previous != null -> previous
-            next != null -> next
+            previous != null && (timeMs - previous.timeMs <= previous.radiusRangeMs) -> previous
+            next != null && (next.timeMs - timeMs <= next.radiusRangeMs) -> next
             else -> fallbackRect?.let { KeyframeBlurBox(timeMs = timeMs, rect = it) }
         }
     }

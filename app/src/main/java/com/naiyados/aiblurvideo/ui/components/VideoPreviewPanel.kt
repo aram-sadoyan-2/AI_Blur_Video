@@ -209,37 +209,18 @@ fun VideoPreviewPanel(
                     )
                 }
 
-                // Center Floating Play Indicator for intuitive video playback toggle
+                // Interactive Tap to Toggle Playback on Viewport (without visual clutter)
                 if (selectedMode != BlurMode.Crop && selectedMode != BlurMode.Object) {
-                    AnimatedVisibility(
-                        visible = !isPlaying,
-                        enter = fadeIn(),
-                        exit = fadeOut(),
-                        modifier = Modifier.align(Alignment.Center)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = onPlayPauseClick
-                                )
-                                .testTag("preview_center_play_button"),
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.55f),
-                            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.75f))
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Rounded.PlayArrow,
-                                    contentDescription = "Play Video",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(34.dp)
-                                )
-                            }
-                        }
-                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onPlayPauseClick
+                            )
+                            .testTag("preview_viewport_touch_area")
+                    )
                 }
             }
         }
@@ -393,6 +374,7 @@ fun PlayerTextureViewFit(
                         }
 
                         texture.setRenderEffect(combinedEffect)
+                        texture.invalidate()
                         lastAppliedBlur = blurRadiusPx
                         lastAppliedFilter = selectedFilter
                         lastAppliedIntensity = filterIntensity

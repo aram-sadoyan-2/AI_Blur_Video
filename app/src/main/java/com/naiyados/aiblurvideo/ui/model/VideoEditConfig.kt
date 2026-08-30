@@ -45,12 +45,12 @@ data class VideoEditConfig(
             return true
         }
 
-        // Check individual selected frames (allow +/- 1000ms frame cluster window)
+        // Check individual selected frames (match corresponding 1000ms frame chunk)
         if (selectedBlurFrameTimestampsMs.isNotEmpty()) {
-            val hasNearMatch = selectedBlurFrameTimestampsMs.any { selTime ->
-                kotlin.math.abs(selTime - timeMs) <= 500L
+            val hasMatch = selectedBlurFrameTimestampsMs.any { selTime ->
+                timeMs >= selTime && timeMs < selTime + 1000L
             }
-            if (hasNearMatch) return true
+            if (hasMatch) return true
         }
 
         return false
