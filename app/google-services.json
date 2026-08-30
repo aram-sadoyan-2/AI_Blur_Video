@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "818182296677",
+    "project_id": "ai-blur-video",
+    "storage_bucket": "ai-blur-video.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:818182296677:android:f2098cf577c40a12cc628c",
+        "android_client_info": {
+          "package_name": "com.naiyados.aiblurvideo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWrxjyJPBgtJ47NW1-11hV7-sCd8T_fF8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
