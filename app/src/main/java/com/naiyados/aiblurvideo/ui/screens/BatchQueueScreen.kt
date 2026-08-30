@@ -78,6 +78,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.naiyados.aiblurvideo.analytics.AppAnalytics
 import com.naiyados.aiblurvideo.queue.BatchQueueManager
 import com.naiyados.aiblurvideo.queue.QueueItemStatus
 import com.naiyados.aiblurvideo.queue.QueueVideoItem
@@ -117,6 +118,7 @@ fun BatchQueueScreen(
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             BatchQueueManager.addVideos(context, uris)
+            AppAnalytics.trackBatchItemAdded(uris.size)
             Toast.makeText(context, "Added ${uris.size} videos to queue", Toast.LENGTH_SHORT).show()
         }
     }
@@ -332,6 +334,7 @@ fun BatchQueueScreen(
                             Button(
                                 onClick = {
                                     if (pendingCount > 0) {
+                                        AppAnalytics.trackBatchProcessingStarted(pendingCount)
                                         BatchQueueManager.startProcessing(context)
                                     } else {
                                         Toast.makeText(context, "All videos already completed or queue is empty", Toast.LENGTH_SHORT).show()

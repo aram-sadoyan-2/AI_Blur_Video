@@ -36,7 +36,7 @@ class VideoEditingFeaturesTest {
         val filters = VideoFilter.values()
         assertTrue(filters.contains(VideoFilter.NONE))
         assertTrue(filters.contains(VideoFilter.CINEMATIC))
-        assertTrue(filters.contains(VideoFilter.CYBERPUNK))
+        assertTrue(filters.contains(VideoFilter.VIBRANT))
         assertTrue(filters.contains(VideoFilter.VINTAGE))
         assertTrue(filters.contains(VideoFilter.NOIR))
         assertTrue(filters.contains(VideoFilter.COOL_ICE))
@@ -154,6 +154,47 @@ class VideoEditingFeaturesTest {
         assertTrue(config.hasActiveEdits())
         assertEquals(315f, config.customObjectRotationDegrees, 0.01f)
         assertEquals(0.85f, config.blurStrength, 0.01f)
+    }
+
+    @Test
+    fun testKeyframeBoxPropagationAndInterpolation() {
+        val centerTimeMs = 1000L
+        val originalRect = android.graphics.RectF(0.2f, 0.3f, 0.6f, 0.7f)
+        val propagated = com.naiyados.aiblurvideo.ui.model.KeyframeBoxHelper.createPropagatedKeyframes(
+            centerTimeMs = centerTimeMs,
+            rect = originalRect,
+            rotationDegrees = 15f,
+            shape = com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT,
+            targetType = com.naiyados.aiblurvideo.autoplate.DetectionTarget.PLATE,
+            frameOffset = 10,
+            fps = 30
+        )
+
+        // At 30fps with +-10 frames offset, should produce 21 frames
+        assertTrue(propagated.isNotEmpty())
+        assertEquals(21, propagated.size)
+        assertEquals(centerTimeMs - 330L, propagated.first().timeMs)
+        assertEquals(centerTimeMs + 330L, propagated.last().timeMs)
+
+        // Querying at 1000ms should resolve exact position
+        val boxAt1000 = com.naiyados.aiblurvideo.ui.model.KeyframeBoxHelper.getBoxAtTime(propagated, 1000L)
+        assertNotNull(boxAt1000)
+        assertEquals(15f, boxAt1000!!.rotationDegrees, 0.001f)
+        assertEquals(com.naiyados.aiblurvideo.ui.model.CustomBlurShape.ROUNDED_RECT, boxAt1000.shape)
+
+        // Querying within the +-10 frame window (e.g. 1100ms)
+        val boxAt1100 = com.naiyados.aiblurvideo.ui.model.KeyframeBoxHelper.getBoxAtTime(propagated, 1100L)
+        assertNotNull(boxAt1100)
+
+        // Merge keyframes with another cluster at 3000ms
+        val secondCluster = com.naiyados.aiblurvideo.ui.model.KeyframeBoxHelper.createPropagatedKeyframes(
+            centerTimeMs = 3000L,
+            rect = android.graphics.RectF(0.4f, 0.4f, 0.8f, 0.8f),
+            frameOffset = 5,
+            fps = 30
+        )
+        val merged = com.naiyados.aiblurvideo.ui.model.KeyframeBoxHelper.mergeKeyframes(propagated, secondCluster)
+        assertEquals(21 + 11, merged.size)
     }
 
     @Test

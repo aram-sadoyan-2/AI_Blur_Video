@@ -25,10 +25,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VideoFile
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -194,11 +200,46 @@ fun VideoPreviewPanel(
                         videoWidth = rawVideoWidth,
                         videoHeight = rawVideoHeight,
                         aspectRatio = aspectRatio,
+                        isPlaying = isPlaying,
+                        onPlayPauseClick = onPlayPauseClick,
                         onCropRectChanged = onCropRectChange,
                         onRotationChanged = onCropRotationChange,
                         onResetCrop = onResetCrop,
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+
+                // Center Floating Play Indicator for intuitive video playback toggle
+                if (selectedMode != BlurMode.Crop && selectedMode != BlurMode.Object) {
+                    AnimatedVisibility(
+                        visible = !isPlaying,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                        modifier = Modifier.align(Alignment.Center)
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onPlayPauseClick
+                                )
+                                .testTag("preview_center_play_button"),
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.55f),
+                            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.75f))
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.PlayArrow,
+                                    contentDescription = "Play Video",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

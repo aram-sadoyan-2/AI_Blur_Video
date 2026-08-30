@@ -15,6 +15,7 @@ import com.naiyados.aiblurvideo.autoplate.AutoPlateTimeline
 import com.naiyados.aiblurvideo.autoplate.PlateMaskInsets
 import com.naiyados.aiblurvideo.autoplate.face.FaceBlurDetector
 import com.naiyados.aiblurvideo.ui.model.BlurMode
+import com.naiyados.aiblurvideo.ui.model.KeyframeBoxHelper
 import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
 import com.naiyados.aiblurvideo.ui.model.VideoEditConfig
 import com.naiyados.aiblurvideo.ui.model.VideoFilter
@@ -103,6 +104,29 @@ object FrameEffectProcessor {
                         current = processed
                     }
                 }
+                // Also apply any manual keyframe corrections if present
+                if (config.customKeyframes.isNotEmpty()) {
+                    val activeKeyframe = KeyframeBoxHelper.getBoxAtTime(config.customKeyframes, timeMs)
+                    if (activeKeyframe != null) {
+                        val absoluteRect = RectF(
+                            activeKeyframe.rect.left * current.width,
+                            activeKeyframe.rect.top * current.height,
+                            activeKeyframe.rect.right * current.width,
+                            activeKeyframe.rect.bottom * current.height
+                        )
+                        val processed = FastStackBlur.blurRotatedRegion(
+                            source = current,
+                            rect = absoluteRect,
+                            rotationDegrees = activeKeyframe.rotationDegrees,
+                            shape = activeKeyframe.shape,
+                            strength = config.blurStrength
+                        )
+                        if (processed != current && current != source) {
+                            current.recycle()
+                        }
+                        current = processed
+                    }
+                }
             }
             BlurMode.FullBlur -> {
                 if (config.shouldBlurFrame(timeMs)) {
@@ -144,21 +168,49 @@ object FrameEffectProcessor {
                         current = processed
                     }
                 }
+
+                // Also apply any manual keyframe face corrections if present
+                if (config.customKeyframes.isNotEmpty()) {
+                    val activeKeyframe = KeyframeBoxHelper.getBoxAtTime(config.customKeyframes, timeMs)
+                    if (activeKeyframe != null) {
+                        val absoluteRect = RectF(
+                            activeKeyframe.rect.left * current.width,
+                            activeKeyframe.rect.top * current.height,
+                            activeKeyframe.rect.right * current.width,
+                            activeKeyframe.rect.bottom * current.height
+                        )
+                        val processed = FastStackBlur.blurRotatedRegion(
+                            source = current,
+                            rect = absoluteRect,
+                            rotationDegrees = activeKeyframe.rotationDegrees,
+                            shape = activeKeyframe.shape,
+                            strength = config.blurStrength
+                        )
+                        if (processed != current && current != source) {
+                            current.recycle()
+                        }
+                        current = processed
+                    }
+                }
             }
             BlurMode.Object -> {
-                val normRect = config.customObjectNormalizedRect
-                if (normRect != null) {
+                val activeKeyframe = KeyframeBoxHelper.getBoxAtTime(
+                    keyframes = config.customKeyframes,
+                    timeMs = timeMs,
+                    fallbackRect = config.customObjectNormalizedRect
+                )
+                if (activeKeyframe != null) {
                     val absoluteRect = RectF(
-                        normRect.left * current.width,
-                        normRect.top * current.height,
-                        normRect.right * current.width,
-                        normRect.bottom * current.height
+                        activeKeyframe.rect.left * current.width,
+                        activeKeyframe.rect.top * current.height,
+                        activeKeyframe.rect.right * current.width,
+                        activeKeyframe.rect.bottom * current.height
                     )
                     val processed = FastStackBlur.blurRotatedRegion(
                         source = current,
                         rect = absoluteRect,
-                        rotationDegrees = config.customObjectRotationDegrees,
-                        shape = config.customObjectShape,
+                        rotationDegrees = activeKeyframe.rotationDegrees,
+                        shape = activeKeyframe.shape,
                         strength = config.blurStrength
                     )
                     if (processed != current && current != source) {

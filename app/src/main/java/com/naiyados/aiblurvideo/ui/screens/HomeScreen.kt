@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.naiyados.aiblurvideo.analytics.AppAnalytics
 import com.naiyados.aiblurvideo.history.ProcessedVideoHistoryManager
 import com.naiyados.aiblurvideo.queue.BatchQueueManager
 import com.naiyados.aiblurvideo.queue.QueueItemStatus
@@ -157,11 +158,14 @@ fun HomeScreen(
                     items = historyItems,
                     onOpenVideo = { uri ->
                         val record = historyItems.find { it.uriString == uri.toString() }
+                        val res = record?.resolutionLabel ?: "Exported Video"
                         previewVideoTitle = if (record != null) "Exported • ${record.resolutionLabel}" else "Exported Video"
                         previewVideoUri = uri
+                        AppAnalytics.trackHistoryVideoPlayed(res)
                     },
                     onDeleteVideo = { id ->
                         ProcessedVideoHistoryManager.removeVideo(context, id)
+                        AppAnalytics.trackHistoryVideoDeleted()
                     }
                 )
             }

@@ -45,7 +45,7 @@ private enum class CropHandleType {
     RESET_BUTTON,    // Top-Left (X)
     ROTATE_BUTTON,   // Top-Right (Rotate ⟳)
     SCALE_BUTTON,    // Bottom-Right (Scale ⤢)
-    BOTTOM_LEFT,     // Bottom-Left
+    PLAY_BUTTON,     // Bottom-Left (Play ▶ / Pause ❚❚)
     EDGE_TOP,        // Top edge center dot
     EDGE_BOTTOM,     // Bottom edge center dot
     EDGE_LEFT,       // Left edge center dot
@@ -59,6 +59,8 @@ fun CropTransformTouchOverlay(
     videoWidth: Int = 1080,
     videoHeight: Int = 1920,
     aspectRatio: VideoAspectRatio = VideoAspectRatio.ORIGINAL,
+    isPlaying: Boolean = false,
+    onPlayPauseClick: () -> Unit = {},
     onCropRectChanged: (RectF) -> Unit,
     onRotationChanged: (Float) -> Unit = {},
     onResetCrop: () -> Unit = {},
@@ -120,9 +122,9 @@ fun CropTransformTouchOverlay(
                         distance(unrotatedTouch.x, unrotatedTouch.y, right, bottom) <= buttonHitRadius -> {
                             CropHandleType.SCALE_BUTTON
                         }
-                        // Bottom-Left corner
+                        // Bottom-Left (Play/Pause ▶/❚❚) button
                         distance(unrotatedTouch.x, unrotatedTouch.y, left, bottom) <= buttonHitRadius -> {
-                            CropHandleType.BOTTOM_LEFT
+                            CropHandleType.PLAY_BUTTON
                         }
                         // 4 Edge midpoint dots
                         distance(unrotatedTouch.x, unrotatedTouch.y, cx, top) <= dotHitRadius -> CropHandleType.EDGE_TOP
@@ -156,6 +158,11 @@ fun CropTransformTouchOverlay(
                         onCropRectChanged(fullRect)
                         onRotationChanged(0f)
                         onResetCrop()
+                    }
+
+                    // If user tapped Bottom-Left Play/Pause button
+                    if (activeHandle == CropHandleType.PLAY_BUTTON) {
+                        onPlayPauseClick()
                     }
 
                     while (true) {
@@ -258,12 +265,6 @@ fun CropTransformTouchOverlay(
                                             val scaleDelta = max(localDx, localDy)
                                             deltaW = scaleDelta * 2f
                                             deltaH = scaleDelta * 2f
-                                        }
-                                        CropHandleType.BOTTOM_LEFT -> {
-                                            deltaW = -localDx
-                                            deltaH = localDy
-                                            shiftLocalX = localDx / 2f
-                                            shiftLocalY = localDy / 2f
                                         }
                                         CropHandleType.EDGE_TOP -> {
                                             deltaH = -localDy
@@ -394,6 +395,13 @@ fun CropTransformTouchOverlay(
                     radius = buttonRadius,
                     iconType = IconType.SCALE
                 )
+
+                // 8. Bottom-Left (▶ / ❚❚) Play/Pause Button
+                drawButtonWithIcon(
+                    center = Offset(left, bottom),
+                    radius = buttonRadius,
+                    iconType = if (isPlaying) IconType.PAUSE else IconType.PLAY
+                )
             }
         }
     }
@@ -402,7 +410,9 @@ fun CropTransformTouchOverlay(
 private enum class IconType {
     CROSS,
     ROTATE,
-    SCALE
+    SCALE,
+    PLAY,
+    PAUSE
 }
 
 private fun DrawScope.drawEdgeMidpointDot(x: Float, y: Float, radius: Float) {
@@ -472,8 +482,29 @@ private fun DrawScope.drawButtonWithIcon(center: Offset, radius: Float, iconType
             drawLine(iconColor, Offset(center.x - d, center.y - d), Offset(center.x - d + ah, center.y - d), stroke)
             drawLine(iconColor, Offset(center.x - d, center.y - d), Offset(center.x - d, center.y - d + ah), stroke)
             // Bottom-right arrowhead
-            drawLine(iconColor, Offset(center.x + d, center.y + d), Offset(center.x + d - ah, center.y + d), stroke)
-            drawLine(iconColor, Offset(center.x + d, center.y + d), Offset(center.x + d, center.y + d - ah), stroke)
+            val bh = 4.5f
+            drawLine(iconColor, Offset(center.x + d, center.y + d), Offset(center.x + d - bh, center.y + d), stroke)
+            drawLine(iconColor, Offset(center.x + d, center.y + d), Offset(center.x + d, center.y + d - bh), stroke)
+        }
+        IconType.PLAY -> {
+            // (▶) Play triangle glyph
+            val r = radius * 0.44f
+            val playPath = Path().apply {
+                moveTo(center.x - r * 0.55f, center.y - r * 0.85f)
+                lineTo(center.x + r * 0.85f, center.y)
+                lineTo(center.x - r * 0.55f, center.y + r * 0.85f)
+                close()
+            }
+            drawPath(playPath, iconColor, style = Fill)
+        }
+        IconType.PAUSE -> {
+            // (❚❚) Pause bars glyph
+            val r = radius * 0.40f
+            val barW = 3.5f
+            val barH = r * 1.6f
+            val gap = 3.5f
+            drawRect(iconColor, Offset(center.x - gap - barW, center.y - barH / 2f), Size(barW, barH))
+            drawRect(iconColor, Offset(center.x + gap, center.y - barH / 2f), Size(barW, barH))
         }
     }
 }

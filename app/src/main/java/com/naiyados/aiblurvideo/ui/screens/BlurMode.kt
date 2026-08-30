@@ -93,6 +93,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import com.naiyados.aiblurvideo.analytics.AppAnalytics
 import com.naiyados.aiblurvideo.autoplate.AutoPlateBox
 import com.naiyados.aiblurvideo.autoplate.AutoPlateOverlay
 import com.naiyados.aiblurvideo.autoplate.AutoPlateScanner
@@ -111,6 +112,7 @@ import com.naiyados.aiblurvideo.ui.components.EditorActionTool
 import com.naiyados.aiblurvideo.ui.components.EditorHeaderBar
 import com.naiyados.aiblurvideo.ui.components.ExportSettingsDialog
 import com.naiyados.aiblurvideo.ui.components.FilterSelectorBar
+import com.naiyados.aiblurvideo.ui.components.FrameSteppingControlBar
 import com.naiyados.aiblurvideo.ui.components.PlaybackControlBar
 import com.naiyados.aiblurvideo.ui.components.ProcessingProgressDialog
 import com.naiyados.aiblurvideo.ui.components.SpeedSelectorBar
@@ -119,6 +121,8 @@ import com.naiyados.aiblurvideo.ui.components.VideoPreviewPanel
 import com.naiyados.aiblurvideo.ui.components.VideoTrimmerControl
 import com.naiyados.aiblurvideo.ui.model.BlurMode
 import com.naiyados.aiblurvideo.ui.model.CustomBlurShape
+import com.naiyados.aiblurvideo.ui.model.KeyframeBlurBox
+import com.naiyados.aiblurvideo.ui.model.KeyframeBoxHelper
 import com.naiyados.aiblurvideo.ui.model.VideoAspectRatio
 import com.naiyados.aiblurvideo.ui.model.VideoEditConfig
 import com.naiyados.aiblurvideo.ui.model.VideoFilter
@@ -331,6 +335,10 @@ fun BlurMode(
         mutableStateOf(ExportSettings())
     }
 
+    var customKeyframes by remember {
+        mutableStateOf<List<KeyframeBlurBox>>(emptyList())
+    }
+
     // Undo & Redo History State
     val undoStack = remember { mutableStateListOf<VideoEditConfig>() }
     val redoStack = remember { mutableStateListOf<VideoEditConfig>() }
@@ -353,6 +361,7 @@ fun BlurMode(
             customObjectNormalizedRect = customObjectRect,
             customObjectRotationDegrees = customObjectRotation,
             customObjectShape = customObjectShape,
+            customKeyframes = customKeyframes,
             isFullVideoBlur = isFullVideoBlur,
             blurFrameRangeStartMs = blurFrameRangeStartMs,
             blurFrameRangeEndMs = blurFrameRangeEndMs,
@@ -390,6 +399,7 @@ fun BlurMode(
         customObjectRect = config.customObjectNormalizedRect
         customObjectRotation = config.customObjectRotationDegrees
         customObjectShape = config.customObjectShape
+        customKeyframes = config.customKeyframes
         isFullVideoBlur = config.isFullVideoBlur
         blurFrameRangeStartMs = config.blurFrameRangeStartMs
         blurFrameRangeEndMs = config.blurFrameRangeEndMs
@@ -458,13 +468,47 @@ fun BlurMode(
         emptyList()
     }
 
-    val displayAutoPlateBoxes = if (currentAutoPlateBoxes.isNotEmpty()) {
-        currentAutoPlateBoxes
-    } else if (livePlateBox != null && (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face)) {
-        listOf(livePlateBox!!)
-    } else {
-        emptyList()
+    val manualKeyframeBox = remember(customKeyframes, currentPositionMs, selectedMode) {
+        if (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face) {
+            KeyframeBoxHelper.getBoxAtTime(customKeyframes, currentPositionMs)
+        } else null
     }
+
+    val displayAutoPlateBoxes = remember(currentAutoPlateBoxes, livePlateBox, manualKeyframeBox, selectedMode, currentPositionMs) {
+        val baseList = if (currentAutoPlateBoxes.isNotEmpty()) {
+            currentAutoPlateBoxes
+        } else if (livePlateBox != null && (selectedMode == BlurMode.AutoPlate || selectedMode == BlurMode.Face)) {
+            listOf(livePlateBox!!)
+        } else {
+            emptyList()
+        }
+
+        if (manualKeyframeBox != null) {
+            val converted = AutoPlateBox(
+                timeMs = currentPositionMs,
+                rect = manualKeyframeBox.rect,
+                text = "Manual Hand Fix",
+                frameWidth = 1080,
+                frameHeight = 1920,
+                confidence = 1.0f,
+                targetType = manualKeyframeBox.targetType
+            )
+            baseList + converted
+        } else {
+            baseList
+        }
+    }
+
+    val activeCustomObjectKeyframe = remember(customKeyframes, currentPositionMs, customObjectRect, customObjectRotation, customObjectShape) {
+        KeyframeBoxHelper.getBoxAtTime(
+            keyframes = customKeyframes,
+            timeMs = currentPositionMs,
+            fallbackRect = customObjectRect
+        )
+    }
+    val effectiveCustomObjectRect = activeCustomObjectKeyframe?.rect ?: customObjectRect
+    val effectiveCustomObjectRotation = activeCustomObjectKeyframe?.rotationDegrees ?: customObjectRotation
+    val effectiveCustomObjectShape = activeCustomObjectKeyframe?.shape ?: customObjectShape
 
     val currentDisplayStats = remember(liveInferenceStats, displayAutoPlateBoxes, isPlaying, isAutoPlateScanning) {
         if (displayAutoPlateBoxes.isNotEmpty()) {
@@ -578,11 +622,19 @@ fun BlurMode(
             exportJob = scope.launch {
                 isExporting = true
                 exportProgress = 0f
+                val exportStartTime = System.currentTimeMillis()
                 try {
                     val duration = maxOf(
                         videoTotalDurationMs,
                         autoPlateVideoDurationMs,
                         player.duration
+                    )
+
+                    AppAnalytics.trackExportStarted(
+                        resolution = settingsToUse.resolution.label,
+                        bitrate = settingsToUse.bitrate.label,
+                        durationMs = duration,
+                        hasAudio = !isMuted
                     )
 
                     val editConfig = VideoEditConfig(
@@ -633,6 +685,15 @@ fun BlurMode(
                         resolutionLabel = editConfig.exportSettings.resolution.label
                     )
 
+                    val totalExportTime = System.currentTimeMillis() - exportStartTime
+                    AppAnalytics.trackExportSuccess(
+                        resolution = settingsToUse.resolution.label,
+                        bitrate = settingsToUse.bitrate.label,
+                        frameCount = result.frameCount,
+                        blurredFrames = result.blurredFrames,
+                        exportTimeMs = totalExportTime
+                    )
+
                     Log.d("VideoEditor", "Export successful! frames=${result.frameCount} blurred=${result.blurredFrames} uri=${result.outputUri}")
                     Toast.makeText(
                         context,
@@ -641,9 +702,11 @@ fun BlurMode(
                     ).show()
                     onSaveClick()
                 } catch (ce: CancellationException) {
+                    AppAnalytics.trackExportCancelled((exportProgress * 100).toInt())
                     Log.d("VideoEditor", "Export cancelled by user")
                     Toast.makeText(context, "Export cancelled — resources freed", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
+                    AppAnalytics.trackExportFailed(e.message ?: "Unknown export error")
                     Log.e("VideoEditor", "Export failed", e)
                     Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
                 } finally {
@@ -757,9 +820,9 @@ fun BlurMode(
                     customCropRect = RectF(0f, 0f, 1f, 1f)
                     customCropRotation = 0f
                 },
-                customObjectNormalizedRect = customObjectRect,
-                customObjectRotationDegrees = customObjectRotation,
-                customObjectShape = customObjectShape,
+                customObjectNormalizedRect = effectiveCustomObjectRect,
+                customObjectRotationDegrees = effectiveCustomObjectRotation,
+                customObjectShape = effectiveCustomObjectShape,
                 onCustomObjectRectChange = { updated ->
                     customObjectRect = updated
                 },
@@ -982,6 +1045,76 @@ fun BlurMode(
             onToggleMute = {
                 isMuted = !isMuted
             }
+        )
+
+        // Frame-by-Frame Precision Stepping & Keyframe Propagation Bar
+        val onStepFrames: (Int) -> Unit = { deltaFrames ->
+            saveSnapshotForUndo()
+            if (isPlaying) {
+                isPlaying = false
+                player.pause()
+            }
+            val frameDurationMs = 33L // ~30fps
+            val maxDur = maxOf(videoTotalDurationMs, player.duration, 1000L)
+            val newPos = (currentPositionMs + deltaFrames * frameDurationMs).coerceIn(0L, maxDur)
+            player.seekTo(newPos)
+            currentPositionMs = newPos
+            val currentFrameIndex = (newPos / frameDurationMs).toInt()
+            AppAnalytics.trackFrameStepped(deltaFrames, currentFrameIndex)
+        }
+
+        val onApplyPropagation: (Int) -> Unit = { frameOffset ->
+            saveSnapshotForUndo()
+            val targetRect = effectiveCustomObjectRect ?: RectF(0.25f, 0.30f, 0.75f, 0.70f)
+            val newKeys = KeyframeBoxHelper.createPropagatedKeyframes(
+                centerTimeMs = currentPositionMs,
+                rect = targetRect,
+                rotationDegrees = effectiveCustomObjectRotation,
+                shape = effectiveCustomObjectShape,
+                targetType = if (selectedMode == BlurMode.Face) DetectionTarget.FACE else DetectionTarget.PLATE,
+                frameOffset = frameOffset,
+                fps = 30
+            )
+            customKeyframes = KeyframeBoxHelper.mergeKeyframes(customKeyframes, newKeys)
+            AppAnalytics.trackKeyframePropagated(frameOffset, customKeyframes.size, selectedMode.name)
+            val totalSpanFrames = frameOffset * 2 + 1
+            Toast.makeText(context, "🎯 Box applied across ±$frameOffset frames (~$totalSpanFrames frames)", Toast.LENGTH_SHORT).show()
+        }
+
+        val onAddSingleKeyframe: () -> Unit = {
+            saveSnapshotForUndo()
+            val targetRect = effectiveCustomObjectRect ?: RectF(0.25f, 0.30f, 0.75f, 0.70f)
+            val newKey = KeyframeBlurBox(
+                timeMs = currentPositionMs,
+                rect = RectF(targetRect),
+                rotationDegrees = effectiveCustomObjectRotation,
+                shape = effectiveCustomObjectShape,
+                targetType = if (selectedMode == BlurMode.Face) DetectionTarget.FACE else DetectionTarget.PLATE
+            )
+            customKeyframes = KeyframeBoxHelper.mergeKeyframes(customKeyframes, listOf(newKey))
+            Toast.makeText(context, "📌 Pinned box to frame #${(currentPositionMs / 33L).toInt()}", Toast.LENGTH_SHORT).show()
+        }
+
+        val onClearKeyframeAtCurrentTime: () -> Unit = {
+            saveSnapshotForUndo()
+            val frameDurationMs = 33L
+            customKeyframes = customKeyframes.filterNot { kotlin.math.abs(it.timeMs - currentPositionMs) <= frameDurationMs * 2 }
+            Toast.makeText(context, "🗑️ Cleared box at current frame", Toast.LENGTH_SHORT).show()
+        }
+
+        FrameSteppingControlBar(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
+            currentPositionMs = currentPositionMs,
+            totalDurationMs = maxOf(videoTotalDurationMs, player.duration, 5000L),
+            isPlaying = isPlaying,
+            onPlayPauseClick = {
+                isPlaying = !isPlaying
+            },
+            onStepFrames = onStepFrames,
+            keyframes = customKeyframes,
+            onApplyPropagation = onApplyPropagation,
+            onAddSingleKeyframe = onAddSingleKeyframe,
+            onClearKeyframeAtCurrentTime = onClearKeyframeAtCurrentTime
         )
 
         // Video Frame Scrubber with Direct Bordered Trimming
@@ -1554,6 +1687,8 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.AutoPlate
+                            AppAnalytics.trackToolSelected("AutoPlate")
+                            AppAnalytics.trackBlurModeChanged("AutoPlate")
                             if (videoUri != null && !isAutoPlateScanning) {
                                 scanJob = scope.launch {
                                     isAutoPlateScanning = true
@@ -1564,6 +1699,8 @@ fun BlurMode(
                                     autoPlateBoxes = emptyList()
                                     autoPlateConfidence = PlateTrackConfidence.Low
                                     autoPlateDominantText = null
+                                    val scanStartTime = System.currentTimeMillis()
+                                    AppAnalytics.trackDetectionScanStarted("Plate_and_Face", videoTotalDurationMs)
 
                                     try {
                                         val scanner = AutoPlateScanner(context)
@@ -1584,6 +1721,12 @@ fun BlurMode(
                                         autoPlateDominantText = scanResult.dominantText
                                         autoPlateFoundCount = scanResult.boxes.size
                                         autoPlateScanProgress = 1.0f
+
+                                        AppAnalytics.trackDetectionScanCompleted(
+                                            detectorType = "Plate_and_Face",
+                                            detectionsCount = scanResult.boxes.size,
+                                            timeTakenMs = System.currentTimeMillis() - scanStartTime
+                                        )
                                     } catch (ce: CancellationException) {
                                         Log.d("AutoPlate", "Scan cancelled")
                                     } finally {
@@ -1602,6 +1745,8 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.FullBlur
+                            AppAnalytics.trackToolSelected("FullBlur")
+                            AppAnalytics.trackBlurModeChanged("FullBlur")
                         }
                     )
 
@@ -1613,6 +1758,8 @@ fun BlurMode(
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.Face
                             isFaceBlurEnabled = true
+                            AppAnalytics.trackToolSelected("FaceBlur")
+                            AppAnalytics.trackBlurModeChanged("FaceBlur")
                             if (videoUri != null && !isAutoPlateScanning && autoPlateBoxes.none { it.targetType == DetectionTarget.FACE }) {
                                 scanJob = scope.launch {
                                     isAutoPlateScanning = true
@@ -1620,6 +1767,8 @@ fun BlurMode(
                                     autoPlateTotalScanFrames = 0
                                     autoPlateScanProgress = 0f
                                     autoPlateFoundCount = 0
+                                    val scanStartTime = System.currentTimeMillis()
+                                    AppAnalytics.trackDetectionScanStarted("FaceOnly", videoTotalDurationMs)
 
                                     try {
                                         val scanner = AutoPlateScanner(context)
@@ -1640,6 +1789,12 @@ fun BlurMode(
                                         autoPlateDominantText = scanResult.dominantText
                                         autoPlateFoundCount = scanResult.boxes.size
                                         autoPlateScanProgress = 1.0f
+
+                                        AppAnalytics.trackDetectionScanCompleted(
+                                            detectorType = "FaceOnly",
+                                            detectionsCount = scanResult.boxes.size,
+                                            timeTakenMs = System.currentTimeMillis() - scanStartTime
+                                        )
                                     } catch (ce: CancellationException) {
                                         Log.d("AutoPlate", "Face scan cancelled")
                                     } finally {
@@ -1658,6 +1813,8 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.Object
+                            AppAnalytics.trackToolSelected("CustomBox")
+                            AppAnalytics.trackBlurModeChanged("Object")
                         }
                     )
 
@@ -1668,6 +1825,8 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.Background
+                            AppAnalytics.trackToolSelected("RemoveBG")
+                            AppAnalytics.trackBlurModeChanged("Background")
                         }
                     )
 
@@ -1678,6 +1837,8 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.Pixelate
+                            AppAnalytics.trackToolSelected("Pixelate")
+                            AppAnalytics.trackBlurModeChanged("Pixelate")
                         }
                     )
 
@@ -1688,6 +1849,7 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.Effects
+                            AppAnalytics.trackToolSelected("Effects")
                         }
                     )
 
@@ -1698,6 +1860,7 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.Speed
+                            AppAnalytics.trackToolSelected("Speed")
                         }
                     )
 
@@ -1708,6 +1871,7 @@ fun BlurMode(
                         onClick = {
                             saveSnapshotForUndo()
                             selectedMode = BlurMode.Crop
+                            AppAnalytics.trackToolSelected("Crop")
                         }
                     )
                 }

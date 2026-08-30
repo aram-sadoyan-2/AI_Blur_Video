@@ -24,6 +24,8 @@ data class VideoEditConfig(
     val customObjectNormalizedRect: RectF? = null, // Normalized 0..1 coordinates for custom object box
     val customObjectRotationDegrees: Float = 0f,
     val customObjectShape: CustomBlurShape = CustomBlurShape.ROUNDED_RECT,
+    val customKeyframes: List<KeyframeBlurBox> = emptyList(), // Frame-by-frame keyframe positions
+    val keyframePropagationOffset: Int = 10, // Default +-10 frames
     val isFullVideoBlur: Boolean = true, // If true, blur entire video in FullBlur mode
     val blurFrameRangeStartMs: Long = 0L,
     val blurFrameRangeEndMs: Long = 0L,
